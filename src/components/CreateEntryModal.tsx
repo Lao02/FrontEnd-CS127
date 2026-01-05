@@ -81,6 +81,19 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
     setFormError(null);
   }, [initialEntry, isOpen]);
 
+  // Auto-calculate paymentAmountPerTerm when amountBorrowed or paymentTerms change (for installment)
+  useEffect(() => {
+    if (transactionType === TransactionType.INSTALLMENT_EXPENSE && amountBorrowed && paymentTerms) {
+      const amt = parseFloat(amountBorrowed);
+      const terms = parseInt(paymentTerms);
+      if (amt > 0 && terms > 0) {
+        setPaymentAmountPerTerm((amt / terms).toFixed(2));
+      } else {
+        setPaymentAmountPerTerm('');
+      }
+    }
+  }, [amountBorrowed, paymentTerms, transactionType]);
+
   // Helper: get group members for selected group (with live state)
   const [groupMembers, setGroupMembers] = useState<Person[]>([]);
   useEffect(() => {
@@ -187,8 +200,6 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
 
   if (!isOpen) return null;
 
-
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -254,6 +265,8 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
     onSave(backendEntry, initialEntry?.id);
   };
 
+  const isEditing = !!initialEntry;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
@@ -273,7 +286,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
           </div>
           <div className="form-group">
             <label>Transaction Type *</label>
-            <select value={transactionType} onChange={e => setTransactionType(e.target.value as TransactionType)}>
+            <select value={transactionType} onChange={e => setTransactionType(e.target.value as TransactionType)} disabled={isEditing}>
               <option value={TransactionType.STRAIGHT_EXPENSE}>Straight Expense</option>
               <option value={TransactionType.INSTALLMENT_EXPENSE}>Installment Expense</option>
               <option value={TransactionType.GROUP_EXPENSE}>Group Expense</option>
@@ -333,7 +346,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
           </div>
           <div className="form-group">
             <label>Date Fully Paid</label>
-            <input type="date" value={dateFullyPaid} onChange={e => setDateFullyPaid(e.target.value)} />
+            <input type="date" value={dateFullyPaid} onChange={e => setDateFullyPaid(e.target.value)} disabled={isEditing} />
           </div>
           <div className="form-group">
             <label>Notes</label>
@@ -359,7 +372,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
               </div>
               <div className="form-group">
                 <label>Payment Amount Per Term</label>
-                <input type="number" min="0" step="0.01" value={paymentAmountPerTerm} onChange={e => setPaymentAmountPerTerm(e.target.value)} />
+                <input type="number" min="0" step="0.01" value={paymentAmountPerTerm} onChange={e => setPaymentAmountPerTerm(e.target.value)} disabled={isEditing} />
               </div>
             </>
           )}
