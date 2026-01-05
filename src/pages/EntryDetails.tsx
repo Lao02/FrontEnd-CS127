@@ -1,4 +1,3 @@
-
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Entry, Person, Group, Payment, PaymentAllocation, InstallmentStatus } from '../types';
@@ -331,6 +330,7 @@ function EntryDetails() {
           people={people}
           groups={groups}
           onGroupsUpdated={async () => setGroups(await groupMockService.getAll())}
+          hasPayments={payments.length > 0}
           key={entry?.id || 'edit-modal'}
         />
       )}
@@ -664,5 +664,4 @@ function EntryDetails() {
   )
 }
 
-export default EntryDetails
-
+export default EntryDetails;

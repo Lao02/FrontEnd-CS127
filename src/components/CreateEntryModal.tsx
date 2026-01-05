@@ -12,6 +12,7 @@ interface CreateEntryModalProps {
   groups: Group[];
   onGroupsUpdated?: () => Promise<void> | void;
   formRef?: React.RefObject<HTMLFormElement>;
+  hasPayments?: boolean;
 }
 
 const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, onSave, initialEntry, people, groups, onGroupsUpdated, formRef }) => {
