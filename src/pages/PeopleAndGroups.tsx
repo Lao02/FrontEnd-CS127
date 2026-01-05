@@ -1,9 +1,8 @@
-
-
 import { useEffect, useState } from 'react';
 import { Person, Group } from '../types';
 import { personMockService } from '../services/personMockService';
 import { groupMockService } from '../services/groupMockService';
+import { entryMockService } from '../services/entryMockService'; // Added import for checking loans
 import CreatePersonModal from '../components/CreatePersonModal';
 import CreateGroupModal from '../components/CreateGroupModal';
 import './PeopleAndGroups.css';
@@ -126,6 +125,18 @@ function PeopleAndGroups() {
     setShowCreatePersonModal(true);
   };
   const handleDeletePerson = async (id: string) => {
+    // Check for unpaid loans
+    const entries = await entryMockService.getAll();
+    const hasUnpaidLoan = entries.some(entry => {
+      if (typeof entry.borrower === 'object' && 'personID' in entry.borrower && entry.borrower.personID.toString() === id) {
+        return entry.amountRemaining > 0; // Assuming amountRemaining indicates unpaid
+      }
+      return false;
+    });
+    if (hasUnpaidLoan) {
+      alert('Cannot delete this person because they have unpaid loans.');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this person?')) {
       await personMockService.delete(id);
       setPeople(await personMockService.getAll());
@@ -151,6 +162,18 @@ function PeopleAndGroups() {
     setShowCreateGroupModal(true);
   };
   const handleDeleteGroup = async (id: string) => {
+    // Check for unpaid loans
+    const entries = await entryMockService.getAll();
+    const hasUnpaidLoan = entries.some(entry => {
+      if (typeof entry.borrower === 'object' && 'groupID' in entry.borrower && entry.borrower.groupID.toString() === id) {
+        return entry.amountRemaining > 0; // Assuming amountRemaining indicates unpaid
+      }
+      return false;
+    });
+    if (hasUnpaidLoan) {
+      alert('Cannot delete this group because it has unpaid loans.');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this group?')) {
       await groupMockService.delete(id);
       setGroups(await groupMockService.getAll());
@@ -315,4 +338,3 @@ function PeopleAndGroups() {
 }
 
 export default PeopleAndGroups;
-
