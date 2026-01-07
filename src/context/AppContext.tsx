@@ -210,6 +210,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setError(null)
       await peopleApi.delete(id)
       setPeople(people.filter(person => person.personID !== id))
+      
+      // Also remove this person from all groups they're a member of
+      setGroups(groups.map(group => ({
+        ...group,
+        groupMembersList: group.groupMembersList?.filter(member => member.personID !== id) || []
+      })))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete person'
       setError(errorMessage)

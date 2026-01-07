@@ -23,9 +23,11 @@ export enum PaymentFrequency {
 }
 
 export enum InstallmentStatus {
-  PENDING = 'PENDING',
+  NOT_STARTED = 'NOT_STARTED',
+  UNPAID = 'UNPAID',
   PAID = 'PAID',
-  OVERDUE = 'OVERDUE',
+  SKIPPED = 'SKIPPED',
+  DELINQUENT = 'DELINQUENT',
 }
 
 export interface InstallmentTerm {

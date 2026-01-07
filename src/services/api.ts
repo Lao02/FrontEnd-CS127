@@ -79,6 +79,11 @@ export const installmentTermsApi = {
       method: 'GET',
     })
   },
+  skipTerm: async (termId: number): Promise<any> => {
+    return apiRequest<any>(`/installment-terms/skip/${termId}`, {
+      method: 'POST',
+    })
+  },
 }
 // Helper to map backend groupId to frontend groupID
 const mapGroupFromBackend = (group: any): Group => {

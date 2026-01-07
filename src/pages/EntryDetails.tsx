@@ -20,10 +20,12 @@ function EntryDetails() {
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalSuccess, setModalSuccess] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   // Payment Allocation (for group entries)
   const [showAllocModal, setShowAllocModal] = useState(false);
   const [editingAlloc, setEditingAlloc] = useState<PaymentAllocation | null>(null);
   const [paymentFromAllocation, setPaymentFromAllocation] = useState<PaymentAllocation | null>(null);
+  const [paymentForTerm, setPaymentForTerm] = useState<{termId: number; termNumber: number} | null>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -62,6 +64,28 @@ function EntryDetails() {
   const handleClosePaymentModal = () => {
     setShowPaymentModal(false);
     setPaymentFromAllocation(null);
+    setPaymentForTerm(null);
+  };
+
+  const handlePayForTerm = (termId: number, termNumber: number) => {
+    setPaymentForTerm({ termId, termNumber });
+    setShowPaymentModal(true);
+  };
+
+  const handleSkipTerm = async (termId: number) => {
+    if (!window.confirm('Are you sure you want to skip this term? This will create a new term at the end.')) return;
+    try {
+      await installmentTermsApi.skipTerm(termId);
+      // Refresh installment terms
+      if (id) {
+        const terms = await installmentTermsApi.getTermsByEntryId(id);
+        setInstallmentTerms(terms);
+        setModalSuccess('Term skipped successfully!');
+        setTimeout(() => setModalSuccess(null), 1500);
+      }
+    } catch (err: any) {
+      setModalError(err?.message || 'Failed to skip term');
+    }
   };
 
   const handleSavePayment = async () => {
@@ -75,10 +99,22 @@ function EntryDetails() {
         setEntry(updatedEntry);
         const updatedPayments = await getPaymentsByEntryId(id);
         setPayments(updatedPayments);
+        
+        // Refresh installment terms if this is an installment entry
+        if (updatedEntry.transactionType === TransactionType.INSTALLMENT) {
+          try {
+            const terms = await installmentTermsApi.getTermsByEntryId(id);
+            setInstallmentTerms(terms);
+          } catch (err) {
+            console.error('Failed to refresh installment terms:', err);
+          }
+        }
+        
         setModalSuccess('Payment added successfully!');
       }
       setShowPaymentModal(false);
       setPaymentFromAllocation(null);
+      setPaymentForTerm(null);
       setTimeout(() => setModalSuccess(null), 1500);
     } catch (err) {
       setModalError('Failed to refresh after payment');
@@ -141,7 +177,7 @@ function EntryDetails() {
   if (!entry) {
     return (
       <div className="entry-details">
-        <p>Loading entry...</p>
+        <p>{isDeleting ? 'Deleting entry...' : 'Loading entry...'}</p>
       </div>
     );
   }
@@ -154,15 +190,21 @@ function EntryDetails() {
   const handleDelete = async () => {
     if (!window.confirm('Are you sure you want to delete this entry?')) return;
     setDeleteLoading(true);
+    setIsDeleting(true);
     setModalError(null);
+    
+    const entryId = entry?.id;
+    if (!entryId) return;
+    
+    // Navigate first before deleting
+    navigate('/payments', { replace: true });
+    
+    // Then delete in the background
     try {
-      if (entry) {
-        await deleteEntry(entry.id);
-        navigate('/payments');
-      }
+      await deleteEntry(entryId);
     } catch (err: any) {
-      setModalError('Failed to delete entry');
-      setDeleteLoading(false);
+      console.error('Failed to delete entry:', err);
+      // Even if deletion fails, we've already navigated away
     }
   };
 
@@ -172,6 +214,39 @@ function EntryDetails() {
     if (id) {
       getEntryById(id).then((e: Entry) => setEntry(e)).catch(() => setEntry(null));
     }
+  };
+
+  // Helper function to calculate correct status based on due date
+  const getCorrectStatus = (term: InstallmentTerm): string => {
+    const backendStatus = term.status;
+    
+    // If already PAID or SKIPPED, keep those statuses
+    if (backendStatus === 'PAID' || backendStatus === 'SKIPPED') {
+      return backendStatus;
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const dueDate = new Date(term.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    // If due date is in the future (hasn't passed yet), it's NOT_STARTED
+    if (today < dueDate) {
+      return 'NOT_STARTED';
+    }
+    
+    // If due date is today, it's UNPAID
+    if (today.getTime() === dueDate.getTime()) {
+      return 'UNPAID';
+    }
+    
+    // If due date is in the past (after due date), it's DELINQUENT
+    if (today > dueDate) {
+      return 'DELINQUENT';
+    }
+    
+    return 'UNPAID';
   };
 
   return (
@@ -371,12 +446,12 @@ function EntryDetails() {
             initialPayment={null}
             people={people}
             entryId={entry.id}
-            termNumber={undefined}
+            termNumber={paymentForTerm?.termId}
             suggestedAmount={entry.transactionType === TransactionType.INSTALLMENT ? entry.paymentAmountPerTerm : undefined}
             suggestedDate={undefined}
             lockedPayee={
               paymentFromAllocation?.groupMemberDto || 
-              (entry.transactionType === TransactionType.STRAIGHT && entry.borrowerId 
+              ((entry.transactionType === TransactionType.STRAIGHT || entry.transactionType === TransactionType.INSTALLMENT) && entry.borrowerId 
                 ? people.find(p => p.personID === entry.borrowerId) 
                 : undefined)
             }
@@ -420,21 +495,52 @@ function EntryDetails() {
                     <th>Due Date</th>
                     <th>Status</th>
                     <th>Notes</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {installmentTerms.map((term: InstallmentTerm) => (
-                    <tr key={term.termId}>
-                      <td>Term {term.termNumber}</td>
-                      <td>{new Date(term.dueDate).toLocaleDateString()}</td>
-                      <td>
-                        <span className={`status-badge status-${term.status.toLowerCase()}`}>
-                          {term.status}
-                        </span>
-                      </td>
-                      <td>{term.notes || '-'}</td>
-                    </tr>
-                  ))}
+                  {installmentTerms.map((term: InstallmentTerm) => {
+                    // Calculate the correct status based on due date
+                    const status = getCorrectStatus(term);
+                    const canPay = status === 'UNPAID' || status === 'DELINQUENT';
+                    const canSkip = status === 'UNPAID';
+                    const noActions = status === 'NOT_STARTED' || status === 'PAID' || status === 'SKIPPED';
+                    
+                    return (
+                      <tr key={term.termId}>
+                        <td>Term {term.termNumber}</td>
+                        <td>{new Date(term.dueDate).toLocaleDateString()}</td>
+                        <td>
+                          <span className={`status-badge status-${status.toLowerCase()}`}>
+                            {status.replace('_', ' ')}
+                          </span>
+                        </td>
+                        <td>{term.notes || '-'}</td>
+                        <td>
+                          {canPay && (
+                            <button
+                              type="button"
+                              className="btn-primary"
+                              style={{ marginRight: '0.5em' }}
+                              onClick={() => handlePayForTerm(term.termId, term.termNumber)}
+                            >
+                              Pay
+                            </button>
+                          )}
+                          {canSkip && (
+                            <button
+                              type="button"
+                              className="btn-secondary"
+                              onClick={() => handleSkipTerm(term.termId)}
+                            >
+                              Skip
+                            </button>
+                          )}
+                          {noActions && <span style={{ color: '#888' }}>-</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
