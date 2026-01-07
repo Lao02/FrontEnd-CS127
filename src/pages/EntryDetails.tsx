@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Entry, Payment, PaymentAllocation, TransactionType, InstallmentTerm } from '../types';
 import { useApp } from '../context/AppContext';
 import { installmentTermsApi, paymentAllocationApi } from '../services/api';
+import { formatBackendDate } from '../utils/date';
 import CreateEntryModal from '../components/CreateEntryModal';
 import CreatePaymentModal from '../components/CreatePaymentModal';
 import CreatePaymentAllocationModal from '../components/CreatePaymentAllocationModal';
@@ -309,13 +310,13 @@ function EntryDetails() {
           {entry.dateBorrowed && (
             <div className="detail-item">
               <label>Date Borrowed:</label>
-              <span>{new Date(entry.dateBorrowed).toLocaleDateString()}</span>
+              <span>{formatBackendDate(entry.dateBorrowed)}</span>
             </div>
           )}
           {entry.dateFullyPaid && (
             <div className="detail-item">
               <label>Date Fully Paid:</label>
-              <span>{new Date(entry.dateFullyPaid).toLocaleDateString()}</span>
+              <span>{formatBackendDate(entry.dateFullyPaid)}</span>
             </div>
           )}
           {entry.transactionType === TransactionType.INSTALLMENT && entry.paymentFrequency && (
@@ -395,7 +396,7 @@ function EntryDetails() {
             <tbody>
               {payments.map((payment: Payment) => (
                 <tr key={payment.paymentId}>
-                  <td>{new Date(payment.paymentDate).toLocaleDateString()}</td>
+                  <td>{formatBackendDate(payment.paymentDate)}</td>
                   <td>{payment.payeeDto.firstName} {payment.payeeDto.lastName}</td>
                   <td>₱{payment.paymentAmount.toLocaleString()}</td>
                   {entry.transactionType === TransactionType.INSTALLMENT && (
@@ -468,7 +469,7 @@ function EntryDetails() {
           <div className="installment-summary">
             <div className="detail-item">
               <label>Start Date:</label>
-              <span>{entry.startDate ? new Date(entry.startDate).toLocaleDateString() : 'N/A'}</span>
+              <span>{entry.startDate ? formatBackendDate(entry.startDate) : 'N/A'}</span>
             </div>
             <div className="detail-item">
               <label>Payment Frequency:</label>
@@ -509,7 +510,7 @@ function EntryDetails() {
                     return (
                       <tr key={term.termId}>
                         <td>Term {term.termNumber}</td>
-                        <td>{new Date(term.dueDate).toLocaleDateString()}</td>
+                        <td>{formatBackendDate(term.dueDate)}</td>
                         <td>
                           <span className={`status-badge status-${status.toLowerCase()}`}>
                             {status.replace('_', ' ')}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Entry, TransactionType, Person, Group, PaymentFrequency } from '../types';
 import { useApp } from '../context/AppContext';
+import { toInputDate } from '../utils/date';
 import './CreateEntryModal.css';
 
 interface CreateEntryModalProps {
@@ -60,14 +61,14 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
         setLenderId(initialEntry.lenderId?.toString() || '');
         setAmountBorrowed(initialEntry.amountBorrowed.toString());
         setDescription(initialEntry.description || '');
-        setDateBorrowed(initialEntry.dateBorrowed ? new Date(initialEntry.dateBorrowed).toISOString().slice(0, 10) : '');
-        setDateFullyPaid(initialEntry.dateFullyPaid ? new Date(initialEntry.dateFullyPaid).toISOString().slice(0, 10) : '');
+        setDateBorrowed(initialEntry.dateBorrowed ? toInputDate(initialEntry.dateBorrowed) : '');
+        setDateFullyPaid(initialEntry.dateFullyPaid ? toInputDate(initialEntry.dateFullyPaid) : '');
         setNotes(initialEntry.notes || '');
         // Handle existing image - use imageProofs from backend
         setExistingImageUrls([]);
         setImageFiles([]);
         if (initialEntry.startDate) {
-          setStartDate(new Date(initialEntry.startDate).toISOString().slice(0, 10));
+          setStartDate(toInputDate(initialEntry.startDate));
           setPaymentFrequency(initialEntry.paymentFrequency || PaymentFrequency.MONTHLY);
           setPaymentTerms(initialEntry.paymentTerms?.toString() || '');
           setPaymentAmountPerTerm(initialEntry.paymentAmountPerTerm?.toString() || '');
