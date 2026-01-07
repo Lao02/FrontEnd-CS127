@@ -30,29 +30,44 @@ export async function apiRequest<T>(
 // Import types
 import { Person, Group, Entry, Payment } from '../types'
 
+// Helper to map backend personId to frontend personID
+const mapPersonFromBackend = (person: any): Person => {
+  console.log('Mapping person from backend:', person);
+  const mapped = {
+    ...person,
+    personID: person.personId || person.personID,
+  };
+  console.log('Mapped person:', mapped);
+  return mapped;
+}
+
 // PEOPLE API
 
 export const peopleApi = {
   getAll: async (): Promise<Person[]> => {
-    return apiRequest<Person[]>('/persons')
+    const persons = await apiRequest<any[]>('/persons')
+    return persons.map(mapPersonFromBackend)
   },
 
   getById: async (id: number): Promise<Person> => {
-    return apiRequest<Person>(`/persons/${id}`)
+    const person = await apiRequest<any>(`/persons/${id}`)
+    return mapPersonFromBackend(person)
   },
 
   create: async (person: Omit<Person, 'personID'>): Promise<Person> => {
-    return apiRequest<Person>('/persons', {
+    const result = await apiRequest<any>('/persons', {
       method: 'POST',
       body: JSON.stringify(person),
     })
+    return mapPersonFromBackend(result)
   },
 
   update: async (id: number, person: Partial<Person>): Promise<Person> => {
-    return apiRequest<Person>(`/persons/${id}`, {
+    const result = await apiRequest<any>(`/persons/${id}`, {
       method: 'PUT',
       body: JSON.stringify(person),
     })
+    return mapPersonFromBackend(result)
   },
 
   delete: async (id: number): Promise<void> => {
@@ -62,29 +77,39 @@ export const peopleApi = {
   },
 }
 
+// Helper to map backend groupId to frontend groupID
+const mapGroupFromBackend = (group: any): Group => ({
+  ...group,
+  groupID: group.groupId || group.groupID,
+})
+
 // GROUPS API
 
 export const groupsApi = {
   getAll: async (): Promise<Group[]> => {
-    return apiRequest<Group[]>('/groups')
+    const groups = await apiRequest<any[]>('/groups')
+    return groups.map(mapGroupFromBackend)
   },
 
   getById: async (id: number): Promise<Group> => {
-    return apiRequest<Group>(`/groups/${id}`)
+    const group = await apiRequest<any>(`/groups/${id}`)
+    return mapGroupFromBackend(group)
   },
 
   create: async (group: Omit<Group, 'groupID'>): Promise<Group> => {
-    return apiRequest<Group>('/groups', {
+    const result = await apiRequest<any>('/groups', {
       method: 'POST',
       body: JSON.stringify(group),
     })
+    return mapGroupFromBackend(result)
   },
 
   update: async (id: number, group: Partial<Group>): Promise<Group> => {
-    return apiRequest<Group>(`/groups/${id}`, {
+    const result = await apiRequest<any>(`/groups/${id}`, {
       method: 'PUT',
       body: JSON.stringify(group),
     })
+    return mapGroupFromBackend(result)
   },
 
   delete: async (id: number): Promise<void> => {
@@ -94,17 +119,53 @@ export const groupsApi = {
   },
 }
 
+// Helper to map Entry from backend (fixes nested person/group IDs)
+const mapEntryFromBackend = (entry: any): Entry => {
+  console.log('Mapping entry from backend:', entry)
+  const mapped: any = { ...entry }
+  
+  // Map payment allocations if present
+  if (entry.paymentAllocations && Array.isArray(entry.paymentAllocations)) {
+    mapped.paymentAllocations = entry.paymentAllocations.map((allocation: any) => ({
+      ...allocation,
+      groupMemberDto: allocation.groupMemberDto ? mapPersonFromBackend(allocation.groupMemberDto) : allocation.groupMemberDto
+    }))
+  }
+  
+  // Map payments if present
+  if (entry.payments && Array.isArray(entry.payments)) {
+    mapped.payments = entry.payments.map((payment: any) => ({
+      ...payment,
+      payeeDto: payment.payeeDto ? mapPersonFromBackend(payment.payeeDto) : payment.payeeDto
+    }))
+  }
+  
+  console.log('Mapped entry:', mapped)
+  return mapped
+}
+
 // ENTRIES API
 
 export const entriesApi = {
   getAll: async (): Promise<Entry[]> => {
-    const grouped = await apiRequest<{ [key: string]: Entry[] }>('/entry/all')
-    // Flatten the grouped object into a single array
-    return Object.values(grouped).flat()
+    try {
+      console.log('Fetching all entries...')
+      const grouped = await apiRequest<{ [key: string]: any[] }>('/entry/all')
+      console.log('Received grouped entries:', grouped)
+      const flattened = Object.values(grouped).flat()
+      console.log('Flattened entries count:', flattened.length)
+      const mapped = flattened.map(mapEntryFromBackend)
+      console.log('Mapped entries:', mapped)
+      return mapped
+    } catch (error) {
+      console.error('Error fetching entries:', error)
+      throw error
+    }
   },
 
   getById: async (id: string): Promise<Entry> => {
-    return apiRequest<Entry>(`/entry/${id}`)
+    const entry = await apiRequest<any>(`/entry/${id}`)
+    return mapEntryFromBackend(entry)
   },
 
 
@@ -162,10 +223,10 @@ export const entriesApi = {
 
   create: async (formData: FormData): Promise<Entry> => {
     const transactionType = formData.get('transactionType') as string
-    if (transactionType === 'Installment Expense') {
+    if (transactionType === 'INSTALLMENT') {
       return entriesApi.createInstallment(formData)
-    } else if (transactionType === 'Group Expense') {
-      return entriesApi.createGroupExpense(formData)
+    } else if (transactionType === 'GROUP') {
+      return entriesApi.createGroupExpenseWithAllocations(formData)
     } else {
       return entriesApi.createStraight(formData)
     }

@@ -59,9 +59,8 @@ function AllPaymentsRecord() {
       const s = search.trim().toLowerCase();
       filtered = filtered.filter(e =>
         e.entryName.toLowerCase().includes(s) ||
-        (typeof e.borrower === 'object' && 'firstName' in e.borrower && `${e.borrower.firstName} ${e.borrower.lastName}`.toLowerCase().includes(s)) ||
-        (typeof e.borrower === 'object' && 'groupName' in e.borrower && e.borrower.groupName.toLowerCase().includes(s)) ||
-        (typeof e.lender === 'object' && 'firstName' in e.lender && `${e.lender.firstName} ${e.lender.lastName}`.toLowerCase().includes(s))
+        e.borrowerName?.toLowerCase().includes(s) ||
+        e.lenderName?.toLowerCase().includes(s)
       );
     }
     if (statusFilter) {
@@ -192,11 +191,7 @@ function AllPaymentsRecord() {
                   <td><span className="entry-name">{entry.entryName}</span></td>
                   <td><span className={`type-badge type-${entry.transactionType.replace(/\s/g, '').toLowerCase()}`}>{entry.transactionType}</span></td>
                   <td>
-                    {'groupName' in entry.borrower
-                      ? <span className="borrower-group">{entry.borrower.groupName}</span>
-                      : 'firstName' in entry.borrower
-                        ? <span className="borrower-person">{entry.borrower.firstName} {entry.borrower.lastName}</span>
-                        : ''}
+                    <span className="borrower-name">{entry.borrowerName || ''}</span>
                   </td>
                   <td><span className="amount">₱{entry.amountBorrowed.toLocaleString()}</span></td>
                   <td><span className="amount-remaining">₱{entry.amountRemaining.toLocaleString()}</span></td>

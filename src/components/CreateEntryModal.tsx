@@ -16,7 +16,7 @@ interface CreateEntryModalProps {
 const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, initialEntry, people, groups, formRef, hasPayments = false }) => {
   const { addEntry, updateEntry } = useApp();
   const [entryName, setEntryName] = useState('');
-  const [transactionType, setTransactionType] = useState<TransactionType>(TransactionType.STRAIGHT_EXPENSE);
+  const [transactionType, setTransactionType] = useState<TransactionType>(TransactionType.STRAIGHT);
   const [borrowerId, setBorrowerId] = useState('');
   const [lenderId, setLenderId] = useState('');
   const [amountBorrowed, setAmountBorrowed] = useState('');
@@ -41,39 +41,28 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
     if (initialEntry) {
       setEntryName(initialEntry.entryName);
       setTransactionType(initialEntry.transactionType);
-      if ('personID' in initialEntry.borrower) {
-        setBorrowerId(initialEntry.borrower.personID.toString());
-      } else if ('groupID' in initialEntry.borrower) {
-        setBorrowerId(initialEntry.borrower.groupID.toString());
-      } else {
-        setBorrowerId('');
-      }
-      setLenderId(initialEntry.lender.personID.toString());
+      setBorrowerId(initialEntry.borrowerId?.toString() || '');
+      setLenderId(initialEntry.lenderId?.toString() || '');
       setAmountBorrowed(initialEntry.amountBorrowed.toString());
       setDescription(initialEntry.description || '');
       setDateBorrowed(initialEntry.dateBorrowed ? new Date(initialEntry.dateBorrowed).toISOString().slice(0, 10) : '');
       setDateFullyPaid(initialEntry.dateFullyPaid ? new Date(initialEntry.dateFullyPaid).toISOString().slice(0, 10) : '');
       setNotes(initialEntry.notes || '');
-      // Handle existing image
-      if (initialEntry.proofOfLoan) {
-        const url = URL.createObjectURL(initialEntry.proofOfLoan);
-        setExistingImageUrl(url);
-      } else {
-        setExistingImageUrl(null);
-      }
+      // Handle existing image - use imageProofs from backend
+      setExistingImageUrl(null);
       setImageFile(null);
-      if (initialEntry.installmentDetails) {
-        setStartDate(initialEntry.installmentDetails.startDate ? new Date(initialEntry.installmentDetails.startDate).toISOString().slice(0, 10) : '');
-        setPaymentFrequency(initialEntry.installmentDetails.paymentFrequency);
-        setPaymentTerms(initialEntry.installmentDetails.paymentTerms.toString());
-        setPaymentAmountPerTerm(initialEntry.installmentDetails.paymentAmountPerTerm.toString());
+      if (initialEntry.startDate) {
+        setStartDate(new Date(initialEntry.startDate).toISOString().slice(0, 10));
+        setPaymentFrequency(initialEntry.paymentFrequency || PaymentFrequency.MONTHLY);
+        setPaymentTerms(initialEntry.paymentTerms?.toString() || '');
+        setPaymentAmountPerTerm(initialEntry.paymentAmountPerTerm?.toString() || '');
       }
       if (initialEntry.paymentAllocations) {
         setPaymentAllocations(initialEntry.paymentAllocations);
       }
     } else {
       setEntryName('');
-      setTransactionType(TransactionType.STRAIGHT_EXPENSE);
+      setTransactionType(TransactionType.STRAIGHT);
       setBorrowerId('');
       setLenderId('');
       setAmountBorrowed('');
@@ -94,7 +83,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
 
   // Auto-clear lender if borrower is changed to match lender (for individual borrowers)
   useEffect(() => {
-    if (transactionType !== TransactionType.GROUP_EXPENSE && borrowerId && lenderId && borrowerId === lenderId) {
+    if (transactionType !== TransactionType.GROUP && borrowerId && lenderId && borrowerId === lenderId) {
       setLenderId('');
       setFormError('Borrower and lender cannot be the same person. Lender has been cleared.');
       setTimeout(() => setFormError(null), 3000);
@@ -103,7 +92,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
 
   // Auto-calculate paymentAmountPerTerm when amountBorrowed or paymentTerms change (for installment)
   useEffect(() => {
-    if (transactionType === TransactionType.INSTALLMENT_EXPENSE && amountBorrowed && paymentTerms) {
+    if (transactionType === TransactionType.INSTALLMENT && amountBorrowed && paymentTerms) {
       const amt = parseFloat(amountBorrowed);
       const terms = parseInt(paymentTerms);
       if (amt > 0 && terms > 0) {
@@ -116,7 +105,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
 
 const [groupMembers, setGroupMembers] = useState<Person[]>([]);
 useEffect(() => {
-  if (transactionType === TransactionType.GROUP_EXPENSE && borrowerId) {
+  if (transactionType === TransactionType.GROUP && borrowerId) {
     // Find the group from the groups prop (which comes from AppContext)
     const selectedGroup = groups.find(g => g.groupID.toString() === borrowerId);
     if (selectedGroup && 'members' in selectedGroup) {
@@ -131,7 +120,7 @@ useEffect(() => {
 
   // Allocation logic
   useEffect(() => {
-    if (transactionType === TransactionType.GROUP_EXPENSE && groupMembers.length && amountBorrowed && allocationMode) {
+    if (transactionType === TransactionType.GROUP && groupMembers.length && amountBorrowed && allocationMode) {
       const amt = parseFloat(amountBorrowed);
       if (allocationMode === 'equal') {
         // Calculate equal distribution - everyone gets the same amount rounded up
@@ -143,9 +132,15 @@ useEffect(() => {
           const percent = +((amountPerPerson / amt) * 100).toFixed(2);
           
           return {
-            payee: m,
+            groupMemberDto: m,
+            groupMemberPersonId: m.personID,
+            borrowerGroupId: parseInt(borrowerId), // Will be set from borrowerId (which is groupId for GROUP type)
+            groupExpenseEntryId: '', // Will be set by backend
+            allocationId: 0, // Temp, backend assigns
             amount: amountPerPerson,
-            percentageOfTotal: percent,
+            amountPaid: 0,
+            percent: percent,
+            paymentAllocationStatus: 'UNPAID' as any,
             description: '',
             notes: '',
           };
@@ -156,12 +151,18 @@ useEffect(() => {
       } else if (allocationMode === 'percent') {
         // Keep user input for percent, but auto compute amount
         setPaymentAllocations(prev => groupMembers.map((m: Person, i: number) => {
-          const prevAlloc = prev[i] || {};
-          const percent = prevAlloc.percentageOfTotal || 0;
+          const prevAlloc = prev[i] || { percent: 0, description: '', notes: '' };
+          const percent = prevAlloc.percent || 0;
           return {
-            payee: m,
+            groupMemberDto: m,
+            groupMemberPersonId: m.personID,
+            borrowerGroupId: parseInt(borrowerId),
+            groupExpenseEntryId: '',
+            allocationId: 0,
             amount: +(amt * (percent / 100)).toFixed(2),
-            percentageOfTotal: percent,
+            amountPaid: 0,
+            percent: percent,
+            paymentAllocationStatus: 'UNPAID' as any,
             description: prevAlloc.description || '',
             notes: prevAlloc.notes || '',
           };
@@ -169,12 +170,18 @@ useEffect(() => {
       } else if (allocationMode === 'amount') {
         // Keep user input for amount, auto compute percent
         setPaymentAllocations(prev => groupMembers.map((m: Person, i: number) => {
-          const prevAlloc = prev[i] || {};
+          const prevAlloc = prev[i] || { amount: 0, description: '', notes: '' };
           const amount = prevAlloc.amount || 0;
           return {
-            payee: m,
+            groupMemberDto: m,
+            groupMemberPersonId: m.personID,
+            borrowerGroupId: parseInt(borrowerId),
+            groupExpenseEntryId: '',
+            allocationId: 0,
             amount: amount,
-            percentageOfTotal: amt ? +(100 * (amount / amt)).toFixed(2) : 0,
+            amountPaid: 0,
+            percent: amt ? +(100 * (amount / amt)).toFixed(2) : 0,
+            paymentAllocationStatus: 'UNPAID' as any,
             description: prevAlloc.description || '',
             notes: prevAlloc.notes || '',
           };
@@ -186,10 +193,10 @@ useEffect(() => {
 
   // Allocation validation
   useEffect(() => {
-    if (transactionType === TransactionType.GROUP_EXPENSE && allocationMode && paymentAllocations.length) {
+    if (transactionType === TransactionType.GROUP && allocationMode && paymentAllocations.length) {
       const amt = parseFloat(amountBorrowed) || 0;
       if (allocationMode === 'percent') {
-        const totalPercent = paymentAllocations.reduce((sum, a) => sum + (+a.percentageOfTotal || 0), 0);
+        const totalPercent = paymentAllocations.reduce((sum, a) => sum + (+a.percent || 0), 0);
         if (totalPercent < 100) setAllocationWarning('Total percent is less than 100%.');
         else if (totalPercent > 100) setAllocationWarning('Warning: Total percent exceeds 100%.');
         else setAllocationWarning(null);
@@ -226,7 +233,7 @@ useEffect(() => {
       return;
     }
     // Validate borrower cannot be lender (for person borrowers)
-    if (transactionType !== TransactionType.GROUP_EXPENSE && borrowerId === lenderId) {
+    if (transactionType !== TransactionType.GROUP && borrowerId === lenderId) {
       setFormError('Borrower and lender cannot be the same person.');
       return;
     }
@@ -234,7 +241,7 @@ useEffect(() => {
       setFormError('Amount borrowed must be a positive number.');
       return;
     }
-    if (transactionType === TransactionType.INSTALLMENT_EXPENSE) {
+    if (transactionType === TransactionType.INSTALLMENT) {
       if (!startDate) {
         setFormError('Installment start date is required.');
         return;
@@ -254,7 +261,7 @@ useEffect(() => {
       const formData = new FormData();
       formData.append('entryName', entryName);
       formData.append('description', description);
-      formData.append('transactionType', transactionType);
+      formData.append('transactionType', transactionType); // Now matches backend enum directly
       formData.append('lenderId', lenderId);
       formData.append('borrowerId', borrowerId);
       formData.append('amountBorrowed', amountBorrowed);
@@ -269,20 +276,31 @@ useEffect(() => {
       }
       
       // For installment expense
-      if (transactionType === TransactionType.INSTALLMENT_EXPENSE) {
+      if (transactionType === TransactionType.INSTALLMENT) {
         if (startDate) formData.append('startDate', startDate);
         formData.append('paymentFrequency', paymentFrequency);
         if (paymentTerms) formData.append('paymentTerms', paymentTerms);
         if (paymentAmountPerTerm) formData.append('paymentAmountPerTerm', paymentAmountPerTerm);
       }
       
-      // For group expense with allocations
-      if (transactionType === TransactionType.GROUP_EXPENSE && paymentAllocations.length > 0) {
-        paymentAllocations.forEach((allocation, index) => {
-          formData.append(`allocations[${index}].personId`, allocation.payee.personID.toString());
-          formData.append(`allocations[${index}].amount`, allocation.amount.toString());
-          formData.append(`allocations[${index}].description`, allocation.description || '');
-        });
+      // For group expense - need to send borrowerGroupId instead of borrowerId
+      if (transactionType === TransactionType.GROUP) {
+        // Remove borrowerId for group expense, use borrowerGroupId
+        formData.delete('borrowerId');
+        formData.append('borrowerGroupId', borrowerId); // borrowerId is actually groupId for GROUP type
+        
+        // Add allocations if any
+        if (paymentAllocations.length > 0) {
+          paymentAllocations.forEach((allocation, index) => {
+            formData.append(`allocations[${index}].groupMemberPersonId`, allocation.groupMemberPersonId.toString());
+            formData.append(`allocations[${index}].amount`, allocation.amount.toString());
+            formData.append(`allocations[${index}].percent`, allocation.percent.toString());
+            formData.append(`allocations[${index}].description`, allocation.description || '');
+            if (allocation.notes) {
+              formData.append(`allocations[${index}].notes`, allocation.notes);
+            }
+          });
+        }
       }
       
       if (initialEntry) {
@@ -293,8 +311,10 @@ useEffect(() => {
         await addEntry(formData);
       }
       
+      // Only close modal if successful (no error thrown)
       onClose();
     } catch (error) {
+      // Error is displayed via formError state, don't close modal
       setFormError(error instanceof Error ? error.message : 'Failed to save entry');
     }
   };
@@ -321,14 +341,14 @@ useEffect(() => {
           <div className="form-group">
             <label>Transaction Type *</label>
             <select value={transactionType} onChange={e => setTransactionType(e.target.value as TransactionType)} disabled={isEditing}>
-              <option value={TransactionType.STRAIGHT_EXPENSE}>Straight Expense</option>
-              <option value={TransactionType.INSTALLMENT_EXPENSE}>Installment Expense</option>
-              <option value={TransactionType.GROUP_EXPENSE}>Group Expense</option>
+              <option value={TransactionType.STRAIGHT}>Straight Expense</option>
+              <option value={TransactionType.INSTALLMENT}>Installment Expense</option>
+              <option value={TransactionType.GROUP}>Group Expense</option>
             </select>
           </div>
           <div className="form-group">
-            <label>{transactionType === TransactionType.GROUP_EXPENSE ? 'Group Borrower *' : 'Borrower *'}</label>
-            {transactionType === TransactionType.GROUP_EXPENSE ? (
+            <label>{transactionType === TransactionType.GROUP ? 'Group Borrower *' : 'Borrower *'}</label>
+            {transactionType === TransactionType.GROUP ? (
               <>
                 <select value={borrowerId} onChange={e => setBorrowerId(e.target.value)} required disabled={hasPayments}>
                   <option value="">Select group...</option>
@@ -361,11 +381,11 @@ useEffect(() => {
               {people && people.length > 0 && people
                 .filter(p => {
                   // For individual borrowers, exclude the selected borrower from lender options
-                  if (transactionType !== TransactionType.GROUP_EXPENSE && borrowerId) {
+                  if (transactionType !== TransactionType.GROUP && borrowerId) {
                     return p.personID.toString() !== borrowerId;
                   }
                   // For group expense, exclude all group members from lender options
-                  if (transactionType === TransactionType.GROUP_EXPENSE && groupMembers.length > 0) {
+                  if (transactionType === TransactionType.GROUP && groupMembers.length > 0) {
                     return !groupMembers.some(m => m.personID.toString() === p.personID.toString());
                   }
                   return true;
@@ -429,7 +449,7 @@ useEffect(() => {
             <textarea value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
           {/* Image file upload removed (unused) */}
-          {transactionType === TransactionType.INSTALLMENT_EXPENSE && (
+          {transactionType === TransactionType.INSTALLMENT && (
             <>
               <div className="form-group">
                 <label>Installment Start Date</label>
@@ -452,7 +472,7 @@ useEffect(() => {
               </div>
             </>
           )}
-          {transactionType === TransactionType.GROUP_EXPENSE && groupMembers.length > 0 && (
+          {transactionType === TransactionType.GROUP && groupMembers.length > 0 && (
             <>
               <div className="form-group">
                 <label>Payment Allocation Mode *</label>
@@ -477,8 +497,8 @@ useEffect(() => {
                     </thead>
                     <tbody>
                       {paymentAllocations.map((alloc, i) => (
-                        <tr key={alloc.payee.personID}>
-                          <td>{alloc.payee.firstName} {alloc.payee.lastName}</td>
+                        <tr key={alloc.groupMemberDto.personID}>
+                          <td>{alloc.groupMemberDto.firstName} {alloc.groupMemberDto.lastName}</td>
                           <td><input type="text" value={alloc.description} onChange={e => setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, description: e.target.value } : a))} disabled={hasPayments} /></td>
                           <td>
                             {allocationMode === 'amount' ? (
@@ -491,7 +511,7 @@ useEffect(() => {
                                   const newAmount = +e.target.value;
                                   const totalAmount = parseFloat(amountBorrowed);
                                   const newPercent = totalAmount > 0 ? +((newAmount / totalAmount) * 100).toFixed(2) : 0;
-                                  setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, amount: newAmount, percentageOfTotal: newPercent } : a));
+                                  setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, amount: newAmount, percent: newPercent } : a));
                                 }} 
                                 disabled={hasPayments} 
                               />
@@ -506,17 +526,17 @@ useEffect(() => {
                                 min="0" 
                                 max="100" 
                                 step="0.01" 
-                                value={alloc.percentageOfTotal} 
+                                value={alloc.percent} 
                                 onChange={e => {
                                   const newPercent = +e.target.value;
                                   const totalAmount = parseFloat(amountBorrowed);
                                   const newAmount = +(totalAmount * (newPercent / 100)).toFixed(2);
-                                  setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, percentageOfTotal: newPercent, amount: newAmount } : a));
+                                  setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, percent: newPercent, amount: newAmount } : a));
                                 }} 
                                 disabled={hasPayments} 
                               />
                             ) : (
-                              alloc.percentageOfTotal
+                              alloc.percent
                             )}
                           </td>
                           <td><input type="text" value={alloc.notes} onChange={e => setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, notes: e.target.value } : a))} disabled={hasPayments} /></td>

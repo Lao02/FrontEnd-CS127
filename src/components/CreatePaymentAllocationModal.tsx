@@ -5,7 +5,7 @@ import './CreatePaymentAllocationModal.css';
 interface CreatePaymentAllocationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (allocation: Omit<PaymentAllocation, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void;
+  onSave: (allocation: Omit<PaymentAllocation, 'allocationId'>, id?: number) => void;
   initialAllocation?: PaymentAllocation | null;
   people: Person[];
   entryId: string;
@@ -23,10 +23,10 @@ const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> 
 
   React.useEffect(() => {
     if (initialAllocation) {
-      setPersonId(initialAllocation.payee.personID.toString());
+      setPersonId(initialAllocation.groupMemberDto.personID.toString());
       setAmount(initialAllocation.amount.toString());
       setAmountPaid((initialAllocation.amountPaid || 0).toString());
-      setPercent(initialAllocation.percentageOfTotal.toString());
+      setPercent(initialAllocation.percent.toString());
       setDescription(initialAllocation.description || '');
       setNotes(initialAllocation.notes || '');
     } else {
@@ -65,21 +65,23 @@ const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> 
       setFormError('Percent must be between 0 and 100.');
       return;
     }
-    const payee = people.find(p => p.personID.toString() === personId);
-    if (!payee) {
+    const groupMemberDto = people.find(p => p.personID.toString() === personId);
+    if (!groupMemberDto) {
       setFormError('Person not found.');
       return;
     }
     onSave({
-      entryId,
-      payee,
+      groupExpenseEntryId: entryId,
+      groupMemberDto,
+      groupMemberPersonId: groupMemberDto.personID,
+      borrowerGroupId: 0, // This should be set from entry
       amount: parseFloat(amount),
       amountPaid: parseFloat(amountPaid || '0'),
-      percentageOfTotal: parseFloat(percent),
+      percent: parseFloat(percent),
       description,
       notes,
-      status: 'UNPAID' as any,
-    }, initialAllocation?.id);
+      paymentAllocationStatus: 'UNPAID' as any,
+    }, initialAllocation?.allocationId);
   };
 
   return (

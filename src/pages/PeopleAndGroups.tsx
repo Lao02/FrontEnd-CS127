@@ -62,7 +62,7 @@ function ManageMembersModal({ isOpen, onClose, groupMembers, onRemove }: ManageM
         </div>
         <div className="form-group">
           <ul>
-            {groupMembers.length === 0 ? <li style={{color:'#888'}}>No members</li> : groupMembers.map(m => (
+            {groupMembers.length === 0 ? <li key="no-members" style={{color:'#888'}}>No members</li> : groupMembers.map(m => (
               <li key={m.personID} style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:'1em'}}>
                 <span>{m.firstName} {m.lastName}</span>
                 <button className="btn-danger" onClick={() => onRemove(m.personID.toString())}>Remove</button>
@@ -79,7 +79,7 @@ function ManageMembersModal({ isOpen, onClose, groupMembers, onRemove }: ManageM
 }
 
 function PeopleAndGroups() {
-  const {people, groups, refreshPeople, refreshGroups, deletePerson, addGroupMember, removeGroupMember, deleteGroup, getAllEntries } = useApp();
+  const {people, groups, refreshPeople, refreshGroups, addPerson, updatePerson, deletePerson, addGroup, updateGroup, deleteGroup, addGroupMember, removeGroupMember, getAllEntries } = useApp();
   const [activeTab, setActiveTab] = useState<'people' | 'groups'>('people');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [addMemberGroupId, setAddMemberGroupId] = useState<number | null>(null);
@@ -118,6 +118,8 @@ function PeopleAndGroups() {
     setShowCreatePersonModal(true);
   };
   const handleEditPerson = (person: Person) => {
+    console.log('Editing person:', person);
+    console.log('Person ID:', person.personID);
     setEditingPerson(person);
     setShowCreatePersonModal(true);
   };
@@ -128,10 +130,7 @@ function PeopleAndGroups() {
       // Check for unpaid loans where person is borrower
       const entries = await getAllEntries();
       const hasUnpaidLoan = entries.some(entry => {
-        if (typeof entry.borrower === 'object' && 'personID' in entry.borrower && entry.borrower.personID.toString() === id) {
-          return entry.amountRemaining > 0;
-        }
-        return false;
+        return entry.borrowerId?.toString() === id && entry.amountRemaining > 0;
       });
       
       if (hasUnpaidLoan) {
@@ -146,9 +145,22 @@ function PeopleAndGroups() {
       console.error('Failed to delete person:', err);
     }
   };
-  const handleSavePerson = async (_data: Omit<Person, 'personID'>, _id?: number) => {
+  const handleSavePerson = async (data: Omit<Person, 'personID'>, id?: number) => {
+    try {
+      console.log('handleSavePerson called with:', { id, data });
+      if (id !== undefined) {
+        console.log('Calling updatePerson with id:', id);
+        await updatePerson(id, data);
+      } else {
+        console.log('Calling addPerson (no id provided)');
+        await addPerson(data);
+      }
       setShowCreatePersonModal(false);
       await refreshPeople();
+    } catch (err) {
+      console.error('Failed to save person:', err);
+      alert('Failed to save person');
+    }
   };
 
   // Groups CRUD
@@ -165,10 +177,7 @@ function PeopleAndGroups() {
     // Check for unpaid loans
     const entries = await getAllEntries();
     const hasUnpaidLoan = entries.some(entry => {
-      if (typeof entry.borrower === 'object' && 'groupID' in entry.borrower && entry.borrower.groupID.toString() === id) {
-        return entry.amountRemaining > 0;
-      }
-      return false;
+      return entry.borrowerGroupId?.toString() === id && entry.amountRemaining > 0;
     });
     if (hasUnpaidLoan) {
       alert('Cannot delete this group because it has unpaid loans.');
@@ -199,9 +208,19 @@ function PeopleAndGroups() {
     }
   };
 
-  const handleSaveGroup = async (_data: Omit<Group, 'groupID'>, _id?: number) => {
+  const handleSaveGroup = async (data: Omit<Group, 'groupID'>, id?: number) => {
+    try {
+      if (id !== undefined) {
+        await updateGroup(id, data);
+      } else {
+        await addGroup(data);
+      }
       setShowCreateGroupModal(false);
       await refreshGroups();
+    } catch (err) {
+      console.error('Failed to save group:', err);
+      alert('Failed to save group');
+    }
   };
 
   return (
@@ -275,9 +294,9 @@ function PeopleAndGroups() {
                     <div className="members">
                       <strong>Members:</strong>
                       <ul>
-                        {Array.isArray(groupWithMembers.members) && groupWithMembers.members.map((member: any) => (
+                        {Array.isArray(groupWithMembers.members) ? groupWithMembers.members.map((member: any) => (
                           <li key={member.personID}>{member.firstName} {member.lastName}</li>
-                        ))}
+                        )) : null}
                       </ul>
                       <div style={{display:'flex',gap:'0.5em',marginTop:'0.5em'}}>
                         <button className="btn-secondary btn-add-member" onClick={() => handleAddMember(group.groupID)}>

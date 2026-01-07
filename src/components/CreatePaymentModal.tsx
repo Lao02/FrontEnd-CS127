@@ -28,7 +28,7 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
 
   React.useEffect(() => {
     if (initialPayment) {
-      setPersonId(initialPayment.payee.personID.toString());
+      setPersonId(initialPayment.payeeDto.personID.toString());
       setPaymentAmount(initialPayment.paymentAmount.toString());
       // Handle date properly to avoid timezone offset
       if (initialPayment.paymentDate) {
