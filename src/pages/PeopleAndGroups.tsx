@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Person, Group } from '../types';
-import { personMockService } from '../services/personMockService';
-import { groupMockService } from '../services/groupMockService';
-import { entryMockService } from '../services/entryMockService'; 
 import CreatePersonModal from '../components/CreatePersonModal';
 import CreateGroupModal from '../components/CreateGroupModal';
 import './PeopleAndGroups.css';
+import { useApp } from '../context/AppContext';
 
 // Add Member Modal
 interface AddMemberModalProps {
@@ -81,8 +79,7 @@ function ManageMembersModal({ isOpen, onClose, groupMembers, onRemove }: ManageM
 }
 
 function PeopleAndGroups() {
-  const [people, setPeople] = useState<Person[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const {people, groups, refreshPeople, refreshGroups, deletePerson, addGroupMember, removeGroupMember, deleteGroup, getAllEntries } = useApp();
   const [activeTab, setActiveTab] = useState<'people' | 'groups'>('people');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [addMemberGroupId, setAddMemberGroupId] = useState<number | null>(null);
@@ -90,18 +87,19 @@ function PeopleAndGroups() {
       setAddMemberGroupId(groupId);
       setShowAddMemberModal(true);
     };
-    const handleAddMemberToGroup = async (personId: string) => {
-      if (addMemberGroupId) {
-        const person = people.find((p: Person) => p.personID.toString() === personId);
-        if (person) {
-          await groupMockService.addMember(addMemberGroupId.toString(), person);
-          setGroups(await groupMockService.getAll());
-        }
-        setGroups(await groupMockService.getAll());
-        setShowAddMemberModal(false);
-        setAddMemberGroupId(null);
-      }
-    };
+      const handleAddMemberToGroup = async (personId: string) => {
+  if (addMemberGroupId) {
+    try {
+      await addGroupMember(addMemberGroupId, parseInt(personId));
+      await refreshGroups();
+      setShowAddMemberModal(false);
+      setAddMemberGroupId(null);
+    } catch (err) {
+      console.error('Failed to add member:', err);
+      alert('Failed to add member to group');
+    }
+  }
+};
   const [showCreatePersonModal, setShowCreatePersonModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [editingPerson, setEditingPerson] = useState<Person | null>(null);
@@ -110,8 +108,8 @@ function PeopleAndGroups() {
   const [manageGroupId, setManageGroupId] = useState<number | null>(null);
 
   useEffect(() => {
-    personMockService.getAll().then(setPeople);
-    groupMockService.getAll().then(setGroups);
+    refreshPeople();
+    refreshGroups();
   }, []);
 
   // People CRUD
@@ -128,7 +126,7 @@ function PeopleAndGroups() {
     
     try {
       // Check for unpaid loans where person is borrower
-      const entries = await entryMockService.getAll();
+      const entries = await getAllEntries();
       const hasUnpaidLoan = entries.some(entry => {
         if (typeof entry.borrower === 'object' && 'personID' in entry.borrower && entry.borrower.personID.toString() === id) {
           return entry.amountRemaining > 0;
@@ -141,22 +139,16 @@ function PeopleAndGroups() {
         return;
       }
       
-      await personMockService.delete(id);
-      setPeople(await personMockService.getAll());
+      await deletePerson(parseInt(id));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete person';
       alert(errorMessage);
       console.error('Failed to delete person:', err);
     }
   };
-  const handleSavePerson = async (data: Omit<Person, 'personID'>, id?: number) => {
-    if (id !== undefined) {
-      await personMockService.update(id.toString(), data);
-    } else {
-      await personMockService.create(data);
-    }
-    setPeople(await personMockService.getAll());
-    setShowCreatePersonModal(false);
+  const handleSavePerson = async (_data: Omit<Person, 'personID'>, _id?: number) => {
+      setShowCreatePersonModal(false);
+      await refreshPeople();
   };
 
   // Groups CRUD
@@ -169,11 +161,12 @@ function PeopleAndGroups() {
     setShowCreateGroupModal(true);
   };
   const handleDeleteGroup = async (id: string) => {
+  try {
     // Check for unpaid loans
-    const entries = await entryMockService.getAll();
+    const entries = await getAllEntries();
     const hasUnpaidLoan = entries.some(entry => {
       if (typeof entry.borrower === 'object' && 'groupID' in entry.borrower && entry.borrower.groupID.toString() === id) {
-        return entry.amountRemaining > 0; // Assuming amountRemaining indicates unpaid
+        return entry.amountRemaining > 0;
       }
       return false;
     });
@@ -182,27 +175,33 @@ function PeopleAndGroups() {
       return;
     }
     if (window.confirm('Are you sure you want to delete this group?')) {
-      await groupMockService.delete(id);
-      setGroups(await groupMockService.getAll());
+      await deleteGroup(parseInt(id));
     }
-  };
+  } catch (err) {
+    console.error('Failed to delete group:', err);
+    alert('Failed to delete group');
+  }
+};
+
+
   const handleManageMembers = (groupId: number) => {
     setManageGroupId(groupId);
     setShowManageMembersModal(true);
   };
 
   const handleRemoveMemberFromGroup = async (groupId: number, personId: string) => {
-    await groupMockService.removeMember(groupId.toString(), personId);
-    setGroups(await groupMockService.getAll());
-  };
-  const handleSaveGroup = async (data: Omit<Group, 'groupID'>, id?: number) => {
-    if (id) {
-      await groupMockService.update(id.toString(), { ...data, groupID: id });
-    } else {
-      await groupMockService.create({ ...data });
+    try {
+      await removeGroupMember(groupId, parseInt(personId));
+      await refreshGroups();
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+      alert('Failed to remove member from group');
     }
-    setGroups(await groupMockService.getAll());
-    setShowCreateGroupModal(false);
+  };
+
+  const handleSaveGroup = async (_data: Omit<Group, 'groupID'>, _id?: number) => {
+      setShowCreateGroupModal(false);
+      await refreshGroups();
   };
 
   return (
