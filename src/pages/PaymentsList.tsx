@@ -14,7 +14,6 @@ const PaymentsList: React.FC<PaymentsListProps> = ({ entryId }) => {
     paymentMockService.getByEntryId(entryId).then(setPayments);
   }, [entryId]);
 
-  // Add, edit, delete logic can be added here with modals if needed
 
   return (
     <div className="payments-list-container">
@@ -23,7 +22,7 @@ const PaymentsList: React.FC<PaymentsListProps> = ({ entryId }) => {
         {payments.map(payment => (
           <li key={payment.id} className="payment-item">
             <span>{payment.paymentAmount} on {payment.paymentDate.toString()}</span>
-            {/* Add edit/delete buttons here if needed */}
+            {/* womp */}
           </li>
         ))}
       </ul>

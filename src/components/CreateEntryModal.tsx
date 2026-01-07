@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { groupMockService } from '../services/groupMockService';
 import { Entry, TransactionType, Person, Group, PaymentFrequency } from '../types';
 import './CreateEntryModal.css';
@@ -15,7 +15,7 @@ interface CreateEntryModalProps {
   hasPayments?: boolean;
 }
 
-const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, onSave, initialEntry, people, groups, onGroupsUpdated, formRef, hasPayments = false }) => {
+const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, onSave, initialEntry, people, groups, formRef, hasPayments = false }) => {
   const [entryName, setEntryName] = useState('');
   const [transactionType, setTransactionType] = useState<TransactionType>(TransactionType.STRAIGHT_EXPENSE);
   const [borrowerId, setBorrowerId] = useState('');
@@ -130,25 +130,6 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
     fetchMembers();
     return () => { mounted = false; };
   }, [transactionType, borrowerId, groups]);
-
-  // Add/remove member handlers (mock service). Notify parent to refresh if provided.
-  const handleAddMemberToGroup = async (personId: string) => {
-    const person = people.find(p => p.personID.toString() === personId);
-    if (person && borrowerId) {
-      await groupMockService.addMember(borrowerId, person);
-      const group = await groupMockService.getById(borrowerId);
-      setGroupMembers((group && (group as any).members) ? (group as any).members : []);
-      if (typeof onGroupsUpdated === 'function') await onGroupsUpdated();
-    }
-  };
-  const handleRemoveMemberFromGroup = async (personId: string) => {
-    if (borrowerId) {
-      await groupMockService.removeMember(borrowerId, personId);
-      const group = await groupMockService.getById(borrowerId);
-      setGroupMembers((group && (group as any).members) ? (group as any).members : []);
-      if (typeof onGroupsUpdated === 'function') await onGroupsUpdated();
-    }
-  };
 
   // Allocation logic
   useEffect(() => {

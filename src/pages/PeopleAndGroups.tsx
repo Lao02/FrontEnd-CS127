@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Person, Group } from '../types';
 import { personMockService } from '../services/personMockService';
 import { groupMockService } from '../services/groupMockService';
-import { entryMockService } from '../services/entryMockService'; // Added import for checking loans
+import { entryMockService } from '../services/entryMockService'; 
 import CreatePersonModal from '../components/CreatePersonModal';
 import CreateGroupModal from '../components/CreateGroupModal';
 import './PeopleAndGroups.css';
@@ -92,7 +92,6 @@ function PeopleAndGroups() {
     };
     const handleAddMemberToGroup = async (personId: string) => {
       if (addMemberGroupId) {
-        // Patch: add to group members in mock service
         const person = people.find((p: Person) => p.personID.toString() === personId);
         if (person) {
           await groupMockService.addMember(addMemberGroupId.toString(), person);
@@ -265,7 +264,6 @@ function PeopleAndGroups() {
           ) : (
             <div className="groups-list">
               {groups.map((group) => {
-                // Patch: add 'members' property if missing (for display only)
                 const groupWithMembers = group as Group & { members?: any[] };
                 return (
                   <div key={group.groupID} className="group-card">

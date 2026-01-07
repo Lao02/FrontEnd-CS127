@@ -5,12 +5,12 @@
   right: 0;
   bottom: 0;
   background: linear-gradient(135deg, rgba(30, 41, 59, 0.4), rgba(79, 140, 255, 0.2));
-  backdrop-filter: blur(8px); /* Adds a cool blur effect to the background */
+  backdrop-filter: blur(8px); 
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeIn 0.3s ease-out; /* Smooth fade-in animation */
+  animation: fadeIn 0.3s ease-out; 
 }
 
 @keyframes fadeIn {
@@ -23,17 +23,17 @@
 }
 
 .modal-content {
-  background: linear-gradient(145deg, #ffffff, #f8fafc); /* Subtle gradient for depth */
+  background: linear-gradient(145deg, #ffffff, #f8fafc); 
   color: #1e293b;
   border-radius: 20px;
   padding: 2.5rem;
   min-width: 380px;
   max-width: 95vw;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1); /* Enhanced shadow with inner glow */
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif; /* Modern font stack */
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.1); 
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif; 
   transform: scale(0.95);
-  animation: scaleIn 0.3s ease-out forwards; /* Scale-in animation for a pop effect */
-  border: 1px solid rgba(79, 140, 255, 0.1); /* Subtle border */
+  animation: scaleIn 0.3s ease-out forwards; 
+  border: 1px solid rgba(79, 140, 255, 0.1); 
 }
 
 @keyframes scaleIn {
@@ -52,7 +52,7 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid linear-gradient(90deg, #4f8cff, #a855f7); /* Gradient accent line */
+  border-bottom: 2px solid linear-gradient(90deg, #4f8cff, #a855f7); 
   padding-bottom: 1rem;
 }
 
@@ -60,7 +60,7 @@
   font-size: 1.5rem;
   font-weight: 700;
   margin: 0;
-  background: linear-gradient(135deg, #4f8cff, #a855f7); /* Gradient text for title */
+  background: linear-gradient(135deg, #4f8cff, #a855f7); 
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -68,7 +68,7 @@
 }
 
 .modal-close {
-  background: linear-gradient(135deg, #e2e8f0, #cbd5e1); /* Gradient button */
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1); 
   border: none;
   font-size: 1.8rem;
   cursor: pointer;
@@ -84,7 +84,7 @@
 }
 
 .modal-close:hover {
-  transform: rotate(90deg) scale(1.1); /* Fun rotation and scale on hover */
+  transform: rotate(90deg) scale(1.1); 
   background: linear-gradient(135deg, #ef4444, #dc2626);
   color: white;
   box-shadow: 0 6px 20px rgba(239, 68, 68, 0.3);
@@ -109,7 +109,7 @@ input[type="text"] {
   border: 2px solid #e5e7eb;
   border-radius: 12px;
   font-size: 1rem;
-  background: linear-gradient(145deg, #ffffff, #f1f5f9); /* Subtle input background */
+  background: linear-gradient(145deg, #ffffff, #f1f5f9); 
   color: #1e293b;
   transition: all 0.3s ease;
   box-sizing: border-box;
@@ -120,7 +120,7 @@ input[type="text"]:focus {
   border: 2px solid #4f8cff;
   outline: none;
   box-shadow: 0 0 0 4px rgba(79, 140, 255, 0.15), inset 0 2px 4px rgba(0, 0, 0, 0.05);
-  transform: translateY(-2px); /* Slight lift on focus */
+  transform: translateY(-2px); 
 }
 
 .modal-actions {
@@ -133,7 +133,7 @@ input[type="text"]:focus {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #4f8cff, #a855f7); /* Gradient primary button */
+  background: linear-gradient(135deg, #4f8cff, #a855f7); 
   color: #fff;
   border: none;
   padding: 0.75rem 2rem;
@@ -201,7 +201,6 @@ input[type="text"]:focus {
   font-weight: bold;
 }
 
-/* Responsive Enhancements */
 @media (max-width: 600px) {
   .modal-content {
     width: 95%;
@@ -224,7 +223,6 @@ input[type="text"]:focus {
   }
 }
 
-/* Additional Cool Touches */
 .form-hint {
   display: block;
   margin-top: 0.3rem;
@@ -233,7 +231,6 @@ input[type="text"]:focus {
   font-style: italic;
 }
 
-/* Ensure buttons are disabled properly */
 .modal-actions button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

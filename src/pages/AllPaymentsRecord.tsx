@@ -1,8 +1,5 @@
-
-
 import { Link } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
-// ...existing code...
 import { personMockService } from '../services/personMockService';
 import { groupMockService } from '../services/groupMockService';
 import { entryMockService } from '../services/entryMockService';
@@ -25,7 +22,6 @@ function AllPaymentsRecord() {
   const [sortKey, setSortKey] = useState<'entryName' | 'transactionType' | 'amountBorrowed' | 'amountRemaining' | 'status'>('entryName');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  // Load all data from mock services on mount
   useEffect(() => {
     entryMockService.getAll().then((data: Entry[]) => setEntries(data));
     personMockService.getAll().then((data: Person[]) => setPeople(data));

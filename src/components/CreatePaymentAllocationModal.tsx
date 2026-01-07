@@ -12,7 +12,7 @@ interface CreatePaymentAllocationModalProps {
   isEditMode?: boolean;
 }
 
-const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> = ({ isOpen, onClose, onSave, initialAllocation, people, entryId, isEditMode = false }) => {
+const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> = ({ isOpen, onClose, onSave, initialAllocation, people, entryId }) => {
   const [personId, setPersonId] = useState('');
   const [amount, setAmount] = useState('');
   const [amountPaid, setAmountPaid] = useState('');

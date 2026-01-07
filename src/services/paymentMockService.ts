@@ -2,9 +2,10 @@ import { Payment, PaymentStatus } from '../types';
 import { entryMockService } from './entryMockService';
 
 let payments: Payment[] = [];
+let nextPaymentId = 1;
 
-function uuid() {
-  return Math.random().toString(36).substring(2, 10) + Date.now();
+function generatePaymentId(): number {
+  return nextPaymentId++;
 }
 
 export const paymentMockService = {
@@ -12,7 +13,7 @@ export const paymentMockService = {
     return [...payments];
   },
 
-  getById: async (id: string): Promise<Payment | undefined> => {
+  getById: async (id: number): Promise<Payment | undefined> => {
     return payments.find(p => p.id === id);
   },
 
@@ -23,7 +24,7 @@ export const paymentMockService = {
   create: async (payment: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>): Promise<Payment> => {
     const newPayment: Payment = {
       ...payment,
-      id: uuid(),
+      id: generatePaymentId(),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -46,14 +47,14 @@ export const paymentMockService = {
     return newPayment;
   },
 
-  update: async (id: string, updates: Partial<Payment>): Promise<Payment | undefined> => {
+  update: async (id: number, updates: Partial<Payment>): Promise<Payment | undefined> => {
     const idx = payments.findIndex(p => p.id === id);
     if (idx === -1) return undefined;
     payments[idx] = { ...payments[idx], ...updates, updatedAt: new Date() };
     return payments[idx];
   },
 
-  delete: async (id: string): Promise<boolean> => {
+  delete: async (id: number): Promise<boolean> => {
     const idx = payments.findIndex(p => p.id === id);
     if (idx === -1) return false;
     

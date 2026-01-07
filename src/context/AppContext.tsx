@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { Entry, Person, Group, Payment } from '../types'
+import { Entry, Person, Group } from '../types'
 import { peopleApi, groupsApi, entriesApi, paymentsApi } from '../services/api'
 import { personMockService } from '../services/personMockService'
 import { groupMockService } from '../services/groupMockService'
@@ -15,30 +15,30 @@ interface AppContextType {
   error: string | null
   
   // Entry operations
-  addEntry: (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updateEntry: (id: string, entry: Partial<Entry>) => Promise<void>
+  addEntry: (formData: FormData) => Promise<void>
+  updateEntry: (id: string, formData: FormData) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
   getEntry: (id: string) => Entry | undefined
   refreshEntries: () => Promise<void>
   
   // Person operations
-  addPerson: (person: Omit<Person, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updatePerson: (id: string, person: Partial<Person>) => Promise<void>
-  deletePerson: (id: string) => Promise<void>
+  addPerson: (person: Omit<Person, 'personID'>) => Promise<void>
+  updatePerson: (id: number, person: Partial<Person>) => Promise<void>
+  deletePerson: (id: number) => Promise<void>
   refreshPeople: () => Promise<void>
   
   // Group operations
-  addGroup: (group: Omit<Group, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updateGroup: (id: string, group: Partial<Group>) => Promise<void>
-  deleteGroup: (id: string) => Promise<void>
+  addGroup: (group: Omit<Group, 'groupID'>) => Promise<void>
+  updateGroup: (id: number, group: Partial<Group>) => Promise<void>
+  deleteGroup: (id: number) => Promise<void>
   refreshGroups: () => Promise<void>
-  addGroupMember: (groupID: string, personID: string) => Promise<void>
-  removeGroupMember: (groupID: string, personID: string) => Promise<void>
+  addGroupMember: (groupID: number, personID: number) => Promise<void>
+  removeGroupMember: (groupID: number, personID: number) => Promise<void>
   
   // Payment operations
-  addPayment: (entryId: string, payment: Omit<Payment, 'id' | 'entryId' | 'createdAt' | 'updatedAt'>) => Promise<void>
-  updatePayment: (entryId: string, paymentId: string, payment: Partial<Payment>) => Promise<void>
-  deletePayment: (entryId: string, paymentId: string) => Promise<void>
+  addPayment: (formData: FormData) => Promise<void>
+  updatePayment: (paymentId: number, formData: FormData) => Promise<void>
+  deletePayment: (paymentId: number) => Promise<void>
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -96,10 +96,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addEntry = async (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>) => {
+  const addEntry = async (formData: FormData) => {
     try {
       setError(null)
-      const newEntry = await entriesApi.create(entry)
+      const newEntry = await entriesApi.create(formData)
       setEntries([...entries, newEntry])
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create entry'
@@ -108,10 +108,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const updateEntry = async (id: string, updatedEntry: Partial<Entry>) => {
+  const updateEntry = async (id: string, formData: FormData) => {
     try {
       setError(null)
-      const updated = await entriesApi.update(id, updatedEntry)
+      const updated = await entriesApi.update(id, formData)
       setEntries(entries.map(entry => entry.id === id ? updated : entry))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update entry'
@@ -152,7 +152,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addPerson = async (person: Omit<Person, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addPerson = async (person: Omit<Person, 'personID'>) => {
     try {
       setError(null)
       const newPerson = await peopleApi.create(person)
@@ -164,11 +164,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const updatePerson = async (id: string, updatedPerson: Partial<Person>) => {
+  const updatePerson = async (id: number, updatedPerson: Partial<Person>) => {
     try {
       setError(null)
-      const updated = await peopleApi.update(Number(id), updatedPerson)
-      setPeople(people.map(person => person.personID.toString() === id ? updated : person))
+      const updated = await peopleApi.update(id, updatedPerson)
+      setPeople(people.map(person => person.personID === id ? updated : person))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update person'
       setError(errorMessage)
@@ -176,11 +176,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const deletePerson = async (id: string) => {
+  const deletePerson = async (id: number) => {
     try {
       setError(null)
-      await peopleApi.delete(Number(id))
-      setPeople(people.filter(person => person.personID.toString() !== id))
+      await peopleApi.delete(id)
+      setPeople(people.filter(person => person.personID !== id))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete person'
       setError(errorMessage)
@@ -204,7 +204,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addGroup = async (group: Omit<Group, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addGroup = async (group: Omit<Group, 'groupID'>) => {
     try {
       setError(null)
       const newGroup = await groupsApi.create(group)
@@ -216,11 +216,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const updateGroup = async (id: string, updatedGroup: Partial<Group>) => {
+  const updateGroup = async (id: number, updatedGroup: Partial<Group>) => {
     try {
       setError(null)
-      const updated = await groupsApi.update(Number(id), updatedGroup)
-      setGroups(groups.map(group => group.groupID.toString() === id ? updated : group))
+      const updated = await groupsApi.update(id, updatedGroup)
+      setGroups(groups.map(group => group.groupID === id ? updated : group))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to update group'
       setError(errorMessage)
@@ -228,11 +228,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const deleteGroup = async (id: string) => {
+  const deleteGroup = async (id: number) => {
     try {
       setError(null)
-      await groupsApi.delete(Number(id))
-      setGroups(groups.filter(group => group.groupID.toString() !== id))
+      await groupsApi.delete(id)
+      setGroups(groups.filter(group => group.groupID !== id))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete group'
       setError(errorMessage)
@@ -240,25 +240,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addGroupMember = async (groupID: string, personID: string) => {
+  const addGroupMember = async (groupID: number, personID: number) => {
     try {
       setError(null)
       // Try backend API first, otherwise use mock service
       let updatedGroup: Group | undefined = undefined
       try {
         // groupsApi may not implement addMember on backend; use any to attempt
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
         updatedGroup = await (groupsApi as any).addMember(groupID, personID)
       } catch (err) {
-        // fallback to in-memory mock
-        const person = (await personMockService.getById(personID as any)) as Person | undefined
+        const person = (await personMockService.getById(personID.toString())) as Person | undefined
         if (person) {
-          updatedGroup = await groupMockService.addMember(groupID, person) as Group | undefined
+          updatedGroup = await groupMockService.addMember(groupID.toString(), person) as Group | undefined
         }
       }
       if (updatedGroup) {
-        setGroups(groups.map(group => group.groupID.toString() === groupID ? updatedGroup as any : group))
+        setGroups(groups.map(group => group.groupID === groupID ? updatedGroup as any : group))
       } else {
         // As a safety, refresh groups
         await refreshGroups()
@@ -270,21 +267,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const removeGroupMember = async (groupID: string, personID: string) => {
+  const removeGroupMember = async (groupID: number, personID: number) => {
     try {
       setError(null)
       try {
         // try backend
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
         await (groupsApi as any).removeMember(groupID, personID)
-        const updatedGroup = await groupsApi.getById(Number(groupID))
-        setGroups(groups.map(group => group.groupID.toString() === groupID ? updatedGroup : group))
+        const updatedGroup = await groupsApi.getById(groupID)
+        setGroups(groups.map(group => group.groupID === groupID ? updatedGroup : group))
       } catch (err) {
         // fallback to mock
-        await groupMockService.removeMember(groupID, personID)
-        const updatedGroup = await groupMockService.getById(groupID)
-        setGroups(groups.map(group => group.groupID.toString() === groupID ? (updatedGroup as any) : group))
+        await groupMockService.removeMember(groupID.toString(), personID.toString())
+        const updatedGroup = await groupMockService.getById(groupID.toString())
+        setGroups(groups.map(group => group.groupID === groupID ? (updatedGroup as any) : group))
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to remove group member'
@@ -294,20 +289,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   // Payment operations
-  const addPayment = async (entryId: string, payment: Omit<Payment, 'id' | 'entryId' | 'createdAt' | 'updatedAt'>) => {
+  const addPayment = async (formData: FormData) => {
     try {
       setError(null)
-      // Payment API doesn't use entryId in path, but payment object should have entryId
-      const paymentWithEntryId = { ...payment, entryId }
-      await paymentsApi.create(paymentWithEntryId)
+      await paymentsApi.create(formData)
       // Refresh entries to get updated status and amountRemaining from backend
-      // Note: Since getAll() returns empty, we'll need to refresh individual entry
-      // For now, we'll try to refresh all (if endpoint exists) or update local state
-      const entry = entries.find(e => e.id === entryId)
-      if (entry) {
-        // Fetch updated entry
-        const updatedEntry = await entriesApi.getById(entryId)
-        setEntries(entries.map(e => e.id === entryId ? updatedEntry : e))
+      const entryId = formData.get('entryId') as string
+      if (entryId) {
+        const entry = entries.find(e => e.id === entryId)
+        if (entry) {
+          // Fetch updated entry
+          const updatedEntry = await entriesApi.getById(entryId)
+          setEntries(entries.map(e => e.id === entryId ? updatedEntry : e))
+        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create payment'
@@ -316,33 +310,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const updatePayment = async (entryId: string, paymentId: string, updatedPayment: Partial<Payment>) => {
-    try {
-      setError(null)
-      await paymentsApi.update(paymentId, updatedPayment)
-      // Refresh the entry to get updated status from backend
-      const entry = entries.find(e => e.id === entryId)
-      if (entry) {
-        const updatedEntry = await entriesApi.getById(entryId)
-        setEntries(entries.map(e => e.id === entryId ? updatedEntry : e))
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to update payment'
-      setError(errorMessage)
-      throw err
-    }
+  const updatePayment = async (_paymentId: number, _formData: FormData) => {
+    setError('Payment update not supported by backend. Delete and create new payment instead.')
+    throw new Error('Payment update not supported by backend. Delete and create new payment instead.')
   }
 
-  const deletePayment = async (entryId: string, paymentId: string) => {
+  const deletePayment = async (paymentId: number) => {
     try {
       setError(null)
       await paymentsApi.delete(paymentId)
-      // Refresh the entry to get updated status from backend
-      const entry = entries.find(e => e.id === entryId)
-      if (entry) {
-        const updatedEntry = await entriesApi.getById(entryId)
-        setEntries(entries.map(e => e.id === entryId ? updatedEntry : e))
-      }
+      // Note: Entry update should be handled separately if needed
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete payment'
       setError(errorMessage)

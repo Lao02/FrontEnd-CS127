@@ -79,7 +79,7 @@ const EntriesList: React.FC = () => {
     setPaymentModalOpen(true);
   };
 
-  const handleDeletePayment = async (paymentId: string, entryId: string) => {
+  const handleDeletePayment = async (paymentId: number, entryId: string) => {
     await paymentMockService.delete(paymentId);
     setPayments({
       ...payments,
@@ -87,7 +87,7 @@ const EntriesList: React.FC = () => {
     });
   };
 
-  const handleSavePayment = async (data: any, id?: string) => {
+  const handleSavePayment = async (data: any, id?: number) => {
     if (!currentEntryId) return;
     if (id) {
       await paymentMockService.update(id, data);

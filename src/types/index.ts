@@ -1,4 +1,3 @@
-// For Installment entries, track each term's status
 export interface InstallmentTerm {
   termNumber: number;
   dueDate: Date;
@@ -40,9 +39,8 @@ export enum PaymentFrequency {
   WEEKLY = 'Weekly',
 }
 
-// Core Types
 export interface Person {
-  personID: number;
+  personID: number; 
   firstName: string;
   lastName: string;
   contact: string;
@@ -51,67 +49,69 @@ export interface Person {
 export interface Group {
   groupID: number;
   groupName: string;
+  groupMembersList?: Person[]; 
 }
 
 export interface Payment {
-  id: string; // UUID
-  entryId: string;
-  paymentDate: Date; // YYMMDD format
-  paymentAmount: number; // Decimal
-  payee: Person;
-  termNumber?: number; // For installment entries - which term this payment is for
-  proof?: Blob; // BLOB - photo/s showing the payment
+  id: number; 
+  entryId: string; 
+  paymentDate: Date; 
+  paymentAmount: number; 
+  payee: Person; 
+  termNumber?: number; 
+  proof?: Blob; 
+  imageUrls?: string[]; 
   notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date; 
+  updatedAt?: Date; 
 }
 
 export interface InstallmentDetails {
-  id: string; // UUID
+  id: string; 
   entryId: string;
-  startDate: Date; // YYMMDD format
+  startDate: Date; 
   paymentFrequency: PaymentFrequency;
-  paymentTerms: number; // Numeric
-  paymentAmountPerTerm: number; // Decimal - auto computed
-  terms: InstallmentTerm[]; // Per-term status
+  paymentTerms: number; 
+  paymentAmountPerTerm: number; 
+  terms: InstallmentTerm[];
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface PaymentAllocation {
-  id: string; // UUID
+  id: string; 
   entryId: string;
-  description: string; // Item name or share by person
+  description: string; 
   payee: Person;
-  amount: number; // Numeric
-  amountPaid: number; // Amount paid towards this allocation
-  percentageOfTotal: number; // Not stored in DB
-  status: PaymentAllocationStatus; // Not stored in DB
+  amount: number; 
+  amountPaid: number; 
+  percentageOfTotal: number; 
+  status: PaymentAllocationStatus; 
   notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface Entry {
-  id: string; // Auto Generated UUID
-  entryName: string; // Alphanumeric
-  description?: string; // Alphanumeric, Optional
-  transactionType: TransactionType; // Alphanumeric
-  dateBorrowed?: Date; // Date (YYMMDD), Optional
-  dateFullyPaid?: Date; // Date (YYMMDD), Optional
-  borrower: Person | Group; // Alphanumeric - can be group
-  lender: Person; // Person who lent the money
-  amountBorrowed: number; // Amount (Decimal)
-  amountRemaining: number; // Amount (Decimal) - defaults to amountBorrowed
-  status: PaymentStatus; // Alphanumeric - defaults to UNPAID
-  notes?: string; // Alphanumeric, Optional
-  paymentNotes?: string; // Alphanumeric, Optional
-  proofOfLoan?: Blob; // BLOB - Photo/s showing the payment (e.g. EWallet screenshot), editable anytime, optional
-  referenceId: string; // Auto Generated Alphanumeric
-  payments?: Payment[]; // List of payments made
-  installmentDetails?: InstallmentDetails; // Only if transactionType is INSTALLMENT_EXPENSE
-  paymentAllocations?: PaymentAllocation[]; // Only if borrower is a Group
+  id: string; 
+  entryName: string; 
+  description?: string; 
+  transactionType: TransactionType; 
+  dateBorrowed?: Date; 
+  dateFullyPaid?: Date; 
+  borrower: Person | Group; 
+  lender: Person;
+  amountBorrowed: number; 
+  amountRemaining: number; 
+  status: PaymentStatus; 
+  notes?: string;
+  paymentNotes?: string; 
+  proofOfLoan?: Blob; 
+  referenceId: string; 
+  payments?: Payment[]; 
+  installmentDetails?: InstallmentDetails; 
+  paymentAllocations?: PaymentAllocation[]; 
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,14 +1,5 @@
-/**
- * API Service - HTTP calls to Spring Boot backend
- * 
- * Base URL: Update this to match your Spring Boot server
- * Default: http://localhost:8080/api
- */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
 
-/**
- * Generic fetch wrapper with error handling
- */
 async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -39,9 +30,7 @@ async function apiRequest<T>(
 // Import types
 import { Person, Group, Entry, Payment } from '../types'
 
-// ============================================================================
 // PEOPLE API
-// ============================================================================
 
 export const peopleApi = {
   getAll: async (): Promise<Person[]> => {
@@ -73,9 +62,7 @@ export const peopleApi = {
   },
 }
 
-// ============================================================================
 // GROUPS API
-// ============================================================================
 
 export const groupsApi = {
   getAll: async (): Promise<Group[]> => {
@@ -107,53 +94,94 @@ export const groupsApi = {
   },
 }
 
-// ============================================================================
 // ENTRIES API
-// ============================================================================
 
 export const entriesApi = {
-  // Note: No "get all entries" endpoint provided
-  // If you need this, add GET /api/entry to your backend
-  // For now, returning empty array - you can fetch individual entries
   getAll: async (): Promise<Entry[]> => {
-    console.warn('Get all entries endpoint not available. Returning empty array.')
-    return []
+    const grouped = await apiRequest<{ [key: string]: Entry[] }>('/entry/all')
+    // Flatten the grouped object into a single array
+    return Object.values(grouped).flat()
   },
 
   getById: async (id: string): Promise<Entry> => {
     return apiRequest<Entry>(`/entry/${id}`)
   },
 
-  // Create Straight Expense
-  createStraight: async (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>): Promise<Entry> => {
-    return apiRequest<Entry>('/entry', {
+
+  createStraight: async (formData: FormData): Promise<Entry> => {
+    const url = `${API_BASE_URL}/entry/straight`
+    const response = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify(entry),
+      body: formData, 
     })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    return response.json()
   },
 
-  // Create Installment Expense
-  createInstallment: async (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>): Promise<Entry> => {
-    return apiRequest<Entry>('/entry/installment', {
+  createInstallment: async (formData: FormData): Promise<Entry> => {
+    const url = `${API_BASE_URL}/entry/installment`
+    const response = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify(entry),
+      body: formData,
     })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    return response.json()
   },
 
-  // Generic create - determines type based on entry.transactionType
-  create: async (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>): Promise<Entry> => {
-    if (entry.transactionType === 'Installment Expense') {
-      return entriesApi.createInstallment(entry)
+  createGroupExpense: async (formData: FormData): Promise<Entry> => {
+    const url = `${API_BASE_URL}/entry/group-expense`
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  },
+
+  createGroupExpenseWithAllocations: async (formData: FormData): Promise<Entry> => {
+    const url = `${API_BASE_URL}/entry/group-expense-with-allocations`
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    return response.json()
+  },
+
+  create: async (formData: FormData): Promise<Entry> => {
+    const transactionType = formData.get('transactionType') as string
+    if (transactionType === 'Installment Expense') {
+      return entriesApi.createInstallment(formData)
+    } else if (transactionType === 'Group Expense') {
+      return entriesApi.createGroupExpense(formData)
     } else {
-      return entriesApi.createStraight(entry)
+      return entriesApi.createStraight(formData)
     }
   },
 
-  update: async (id: string, entry: Partial<Entry>): Promise<Entry> => {
-    return apiRequest<Entry>(`/entry/${id}`, {
+  update: async (id: string, formData: FormData): Promise<Entry> => {
+    const url = `${API_BASE_URL}/entry/${id}`
+    const response = await fetch(url, {
       method: 'PUT',
-      body: JSON.stringify(entry),
+      body: formData,
     })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    return response.json()
   },
 
   delete: async (id: string): Promise<void> => {
@@ -161,18 +189,23 @@ export const entriesApi = {
       method: 'DELETE',
     })
   },
+
+  // Delete all paid entries
+  deleteAllPaid: async (): Promise<void> => {
+    return apiRequest<void>('/entry/paid', {
+      method: 'DELETE',
+    })
+  },
 }
 
-// ============================================================================
 // PAYMENTS API
-// ============================================================================
 
 export const paymentsApi = {
   getAll: async (): Promise<Payment[]> => {
     return apiRequest<Payment[]>('/payments/all')
   },
 
-  getById: async (paymentId: string): Promise<Payment> => {
+  getById: async (paymentId: number): Promise<Payment> => {
     return apiRequest<Payment>(`/payments/${paymentId}`)
   },
 
@@ -180,27 +213,54 @@ export const paymentsApi = {
     return apiRequest<Payment[]>(`/payments/entry/${entryId}`)
   },
 
-  getByPayeeId: async (payeeId: string): Promise<Payment[]> => {
+  getByPayeeId: async (payeeId: number): Promise<Payment[]> => {
     return apiRequest<Payment[]>(`/payments/by/${payeeId}`)
   },
 
-  create: async (payment: Omit<Payment, 'id' | 'entryId' | 'createdAt' | 'updatedAt'>): Promise<Payment> => {
-    return apiRequest<Payment>('/payments', {
+  create: async (formData: FormData): Promise<Payment> => {
+    const url = `${API_BASE_URL}/payments`
+    const response = await fetch(url, {
       method: 'POST',
-      body: JSON.stringify(payment),
+      body: formData,
     })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    return response.json()
   },
 
-  update: async (paymentId: string, payment: Partial<Payment>): Promise<Payment> => {
-    return apiRequest<Payment>(`/payments/${paymentId}`, {
-      method: 'PUT',
-      body: JSON.stringify(payment),
-    })
+  update: async (_paymentId: number, _payment: Partial<Payment>): Promise<Payment> => {
+    console.warn('Payment update not implemented in backend')
+    throw new Error('Payment update not supported. Delete and create new payment instead.')
   },
 
-  delete: async (paymentId: string): Promise<void> => {
+  delete: async (paymentId: number): Promise<void> => {
     return apiRequest<void>(`/payments/${paymentId}`, {
       method: 'DELETE',
     })
+  },
+
+  deleteAllPayments: async (): Promise<void> => {
+    return apiRequest<void>('/payments/all', {
+      method: 'DELETE',
+    })
+  },
+
+  deleteByPayee: async (personId: number): Promise<void> => {
+    return apiRequest<void>(`/payments/by/${personId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  deleteByEntry: async (entryId: string): Promise<void> => {
+    return apiRequest<void>(`/payments/entry/${entryId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // Get payments for specific allocation
+  getPaymentsForAllocation: async (entryId: string, memberPersonId: number): Promise<Payment[]> => {
+    return apiRequest<Payment[]>(`/payments/allocation/${entryId}/${memberPersonId}`)
   },
 }

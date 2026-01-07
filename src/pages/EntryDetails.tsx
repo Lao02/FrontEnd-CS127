@@ -141,7 +141,7 @@ function EntryDetails() {
         
         // If payment is for a specific term, mark that term as paid
         if (payment.termNumber && entry?.installmentDetails) {
-          const termIdx = payment.termNumber - 1; // Convert to 0-indexed
+          const termIdx = payment.termNumber - 1; 
           
           // Get fresh entry data first to get updated amountRemaining and status from payment service
           const freshEntry = await entryMockService.getById(id);

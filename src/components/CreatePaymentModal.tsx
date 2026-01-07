@@ -5,7 +5,7 @@ import './CreatePaymentModal.css';
 interface CreatePaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (payment: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>, id?: string) => void;
+  onSave: (payment: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>, id?: number) => void;
   initialPayment?: Payment | null;
   people: Person[];
   entryId: string;
@@ -42,10 +42,8 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
       setNotes(initialPayment.notes || '');
       setProof(null);
     } else {
-      // Use locked payee if provided, otherwise use default payee
       setPersonId(lockedPayee ? lockedPayee.personID.toString() : (defaultPayee ? defaultPayee.personID.toString() : ''));
       setPaymentAmount(suggestedAmount ? suggestedAmount.toString() : '');
-      // Handle suggested date properly to avoid timezone offset
       if (suggestedDate) {
         const d = new Date(suggestedDate);
         const year = d.getFullYear();
@@ -63,13 +61,9 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
 
   if (!isOpen) return null;
 
-  // Get max allowed payment (from parent EntryDetails via prop or context)
-  // For now, assume parent passes correct people (single borrower or group member)
-  // We'll fetch the entry from the mock service to get amountRemaining
   const [maxAmount, setMaxAmount] = React.useState<number | null>(null);
   React.useEffect(() => {
     (async () => {
-      // Try to get entry details for max amount
       if (entryId) {
         const entry = await import('../services/entryMockService').then(m => m.entryMockService.getById(entryId));
         if (entry) setMaxAmount(entry.amountRemaining);
@@ -110,23 +104,9 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
     }, initialPayment?.id);
   };
 
-  // Restrict payee options to only the borrower (if person) or group members (if group)
-  let payeeOptions: Person[] = people;
-  // Try to get the entry from the parent window (EntryDetails passes people and entryId)
-  // We'll use a prop for people, but filter here:
   React.useEffect(() => {
-    // No-op, just to keep linter happy about people dependency
   }, [people]);
-  // Try to infer the correct payee options
   if (window && window.location && entryId && people.length > 0) {
-    // Try to get the entry from the DOM (not ideal, but we don't have entry object here)
-    // Instead, rely on people prop and entryId
-    // In EntryDetails, people is passed as:
-    // - If borrower is a person: people = [that person]
-    // - If borrower is a group: people = group members
-    // But in your code, people is always all people, so we need to filter here
-    // So, let's assume the parent passes a prop 'payeeOptions' in the future for best UX
-    // For now, we will not change the prop signature, but you should update EntryDetails to pass the correct people
   }
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -169,7 +149,7 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
               min="0"
               step="0.01"
               value={paymentAmount}
-              max={maxPaymentAmount !== undefined ? maxPaymentAmount : (maxAmount !== null ? maxAmount : undefined)}
+              max={maxPaymentAmount !== undefined ? maxPaymentAmount.toString() : (maxAmount !== null ? maxAmount.toString() : undefined)}
               readOnly={!!termNumber && !!suggestedAmount}
               disabled={!!initialPayment}
               onChange={e => {
