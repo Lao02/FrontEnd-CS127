@@ -121,8 +121,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       setError(null)
       await entriesApi.deleteAllPaid()
-      // Remove all paid entries from local state
-      setEntries(entries.filter(entry => entry.status !== 'PAID'))
+      // Refresh entries from backend to get updated list
+      await refreshEntries()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete paid entries'
       setError(errorMessage)
@@ -287,8 +287,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await apiRequest(`/groups/${groupID}/members/${personID}`, {
         method: 'DELETE',
       })
-      // Refresh the group to get updated members list
-      await refreshGroups()
+      // Update local state immediately
+      setGroups(groups.map(group => {
+        if (group.groupID === groupID) {
+          return {
+            ...group,
+            groupMembersList: group.groupMembersList?.filter(member => member.personID !== personID) || []
+          }
+        }
+        return group
+      }))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to remove group member'
       setError(errorMessage)

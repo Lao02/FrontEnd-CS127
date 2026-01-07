@@ -22,6 +22,20 @@ export enum PaymentFrequency {
   WEEKLY = 'WEEKLY',
 }
 
+export enum InstallmentStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+}
+
+export interface InstallmentTerm {
+  termId: number;
+  termNumber: number;
+  dueDate: Date;
+  status: InstallmentStatus | string;
+  notes?: string;
+}
+
 export interface Person {
   personID: number; 
   firstName: string;

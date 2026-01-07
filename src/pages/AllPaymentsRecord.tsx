@@ -170,9 +170,9 @@ function AllPaymentsRecord() {
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
-          <option value="Straight Expense">Straight</option>
-          <option value="Installment Expense">Installment</option>
-          <option value="Group Expense">Group</option>
+          <option value="STRAIGHT">Straight</option>
+          <option value="INSTALLMENT">Installment</option>
+          <option value="GROUP">Group</option>
         </select>
       </div>
 

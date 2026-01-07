@@ -253,9 +253,16 @@ export const entriesApi = {
 
   // Delete all paid entries
   deleteAllPaid: async (): Promise<void> => {
-    return apiRequest<void>('/entry/paid', {
+    const url = `${API_BASE_URL}/entry/paid`
+    const response = await fetch(url, {
       method: 'DELETE',
     })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: response.statusText }))
+      throw new Error(error.message || `HTTP error! status: ${response.status}`)
+    }
+    // Don't try to parse response as JSON - backend returns text
+    return
   },
 }
 

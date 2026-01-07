@@ -158,7 +158,7 @@ function EntryDetails() {
     try {
       if (entry) {
         await deleteEntry(entry.id);
-        navigate('/all-payments');
+        navigate('/payments');
       }
     } catch (err: any) {
       setModalError('Failed to delete entry');
