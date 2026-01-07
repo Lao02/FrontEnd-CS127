@@ -19,7 +19,6 @@ function EntryDetails() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [editingPayment, setEditingPayment] = useState<Payment | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalSuccess, setModalSuccess] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -37,7 +36,6 @@ function EntryDetails() {
     if (!entry || !entry.installmentDetails) return;
     // Open payment modal with term number and suggested amount
     setCurrentTermNumber(termIdx + 1); // termNumber is 1-indexed
-    setEditingPayment(null);
     setShowPaymentModal(true);
   };
 
@@ -127,128 +125,16 @@ function EntryDetails() {
 
   // Payment handlers
   const handleAddPayment = () => {
-    setEditingPayment(null);
     setCurrentTermNumber(undefined); // Clear term number for general payments
     setShowPaymentModal(true);
   };
 
-  const handleEditPayment = (payment: Payment) => {
-    setEditingPayment(payment);
-    setCurrentTermNumber(payment.termNumber); // Preserve term number if editing installment payment
-    setShowPaymentModal(true);
-  };
-
-  const handleDeletePayment = async (paymentId: string) => {
-    if (!window.confirm('Are you sure you want to delete this payment?')) return;
-    setPaymentLoading(true);
-    setModalError(null);
-    try {
-      // Get the payment details before deleting to check if it's linked to a term
-      const payments = await paymentMockService.getByEntryId(id!);
-      const paymentToDelete = payments.find(p => p.id === paymentId);
-      
-      await paymentMockService.delete(paymentId);
-      if (id) setPayments(await paymentMockService.getByEntryId(id));
-      
-      // If payment was for a specific term, revert that term to unpaid
-      if (paymentToDelete?.termNumber && entry?.installmentDetails) {
-        const termIdx = paymentToDelete.termNumber - 1; // Convert to 0-indexed
-        
-        // Get fresh entry data first to get updated amountRemaining and status from payment service
-        const freshEntry = await entryMockService.getById(id!);
-        if (freshEntry && freshEntry.installmentDetails) {
-          // Determine what the status should be after removing payment
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          const termDueDate = new Date(freshEntry.installmentDetails.terms[termIdx].dueDate);
-          termDueDate.setHours(0, 0, 0, 0);
-          
-          let newStatus = InstallmentStatus.UNPAID;
-          if (today.getTime() === termDueDate.getTime()) {
-            newStatus = InstallmentStatus.UNPAID;
-          } else if (today > termDueDate) {
-            newStatus = InstallmentStatus.DELINQUENT;
-          } else if (today < termDueDate) {
-            const installmentStartDate = new Date(freshEntry.installmentDetails.startDate);
-            installmentStartDate.setHours(0, 0, 0);
-            if (today < installmentStartDate) {
-              newStatus = InstallmentStatus.NOT_STARTED;
-            } else {
-              newStatus = InstallmentStatus.NOT_STARTED; // Before due date
-            }
-          }
-          
-          const updatedTerms = freshEntry.installmentDetails.terms.map((t, i) =>
-            i === termIdx
-              ? {
-                  ...t,
-                  paymentDate: undefined,
-                  status: newStatus,
-                }
-              : t
-          );
-          
-          const finalEntry = {
-            ...freshEntry,
-            installmentDetails: {
-              ...freshEntry.installmentDetails,
-              terms: updatedTerms,
-            },
-          };
-          
-          // Update the entry with the new term status while preserving amountRemaining
-          await entryMockService.update(id!, {
-            installmentDetails: finalEntry.installmentDetails,
-          });
-          
-          setEntry(finalEntry);
-        }
-      } else {
-        // For non-installment payments, refresh entry to recalculate amountRemaining and status
-        if (id) {
-          const updatedEntry = await entryMockService.getById(id);
-          
-          // For group expense, update payment allocation's amountPaid
-          if (updatedEntry && updatedEntry.transactionType === 'Group Expense' && updatedEntry.paymentAllocations && paymentToDelete?.payee) {
-            const updatedAllocations = updatedEntry.paymentAllocations.map(alloc => {
-              if (alloc.payee.personID === paymentToDelete.payee.personID) {
-                return {
-                  ...alloc,
-                  amountPaid: Math.max(0, (alloc.amountPaid || 0) - paymentToDelete.paymentAmount)
-                };
-              }
-              return alloc;
-            });
-            await entryMockService.update(id, { paymentAllocations: updatedAllocations });
-            // Refresh entry again to get updated allocations
-            const finalEntry = await entryMockService.getById(id);
-            setEntry(finalEntry ?? null);
-          } else {
-            setEntry(updatedEntry ?? null);
-          }
-        }
-      }
-      
-      setModalSuccess('Payment deleted successfully!');
-      setTimeout(() => setModalSuccess(null), 1500);
-    } catch (err) {
-      setModalError('Failed to delete payment');
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
-
-  const handleSavePayment = async (payment: Omit<Payment, 'id' | 'entryId' | 'createdAt' | 'updatedAt'>, pid?: string) => {
+  const handleSavePayment = async (payment: Omit<Payment, 'id' | 'entryId' | 'createdAt' | 'updatedAt'>) => {
     setModalError(null);
     setPaymentLoading(true);
     try {
-      if (pid) {
-        await paymentMockService.update(pid, payment);
-        setModalSuccess('Payment updated successfully!');
-      } else {
-        if (id) await paymentMockService.create({ ...payment, entryId: id });
-        setModalSuccess('Payment added successfully!');
-      }
+      if (id) await paymentMockService.create({ ...payment, entryId: id });
+      setModalSuccess('Payment added successfully!');
       if (id) {
         // Refresh payments list
         setPayments(await paymentMockService.getByEntryId(id));
@@ -327,7 +213,6 @@ function EntryDetails() {
   const handlePayFromAllocation = (alloc: PaymentAllocation) => {
     // Store allocation details and open payment modal
     setPaymentFromAllocation(alloc);
-    setEditingPayment(null);
     setCurrentTermNumber(undefined);
     setShowPaymentModal(true);
   };
@@ -560,7 +445,6 @@ function EntryDetails() {
                 {entry.transactionType === 'Installment Expense' && <th>Term</th>}
                 <th>Proof</th>
                 <th>Notes</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -577,8 +461,7 @@ function EntryDetails() {
                       <img 
                         src={URL.createObjectURL(payment.proof)} 
                         alt="Payment proof" 
-                        style={{ 
-                          maxWidth: '80px', 
+                        style={{maxWidth: '80px', 
                           maxHeight: '80px', 
                           objectFit: 'cover', 
                           border: '1px solid #ddd', 
@@ -598,10 +481,6 @@ function EntryDetails() {
                     )}
                   </td>
                   <td>{payment.notes}</td>
-                  <td>
-                    <button className="btn-secondary" onClick={() => handleEditPayment(payment)}>Edit</button>
-                    <button className="btn-danger" onClick={() => handleDeletePayment(payment.id)} disabled={paymentLoading}>Delete</button>
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -617,7 +496,7 @@ function EntryDetails() {
               setPaymentFromAllocation(null);
             }}
             onSave={handleSavePayment}
-            initialPayment={editingPayment}
+            initialPayment={null}
             people={(() => {
               if (!entry) return people;
               if (
