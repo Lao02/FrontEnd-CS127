@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Payment, Person } from '../types';
+import { useApp } from '../context/AppContext';
 import './CreatePaymentModal.css';
 
 interface CreatePaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (payment: Omit<Payment, 'id' | 'createdAt' | 'updatedAt'>, id?: number) => void;
   initialPayment?: Payment | null;
   people: Person[];
   entryId: string;
@@ -17,7 +17,8 @@ interface CreatePaymentModalProps {
   defaultPayee?: Person; // For non-group expense - default to borrower
 }
 
-const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose, onSave, initialPayment, people, entryId, termNumber, suggestedAmount, suggestedDate, lockedPayee, maxPaymentAmount, defaultPayee }) => {
+const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose, initialPayment, people, entryId, termNumber, suggestedAmount, suggestedDate, lockedPayee, maxPaymentAmount, defaultPayee }) => {
+  const { addPayment, getEntryById } = useApp();
   const [personId, setPersonId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
@@ -65,13 +66,17 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
   React.useEffect(() => {
     (async () => {
       if (entryId) {
-        const entry = await import('../services/entryMockService').then(m => m.entryMockService.getById(entryId));
-        if (entry) setMaxAmount(entry.amountRemaining);
+        try {
+          const entry = await getEntryById(entryId);
+          if (entry) setMaxAmount(entry.amountRemaining);
+        } catch (err) {
+          console.error('Failed to get entry:', err);
+        }
       }
     })();
-  }, [entryId]);
+  }, [entryId, getEntryById]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
     if (!personId) {
@@ -93,15 +98,23 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
       setFormError('Payee not found.');
       return;
     }
-    onSave({
-      entryId,
-      paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-      paymentAmount: parseFloat(paymentAmount),
-      payee,
-      termNumber,
-      proof: proof ? proof as Blob : undefined,
-      notes,
-    }, initialPayment?.id);
+
+    // Build FormData for backend
+    const formData = new FormData();
+    formData.append('entryId', entryId);
+    formData.append('personId', personId);
+    formData.append('paymentAmount', paymentAmount);
+    formData.append('paymentDate', paymentDate || new Date().toISOString().slice(0, 10));
+    if (notes) formData.append('notes', notes);
+    if (termNumber) formData.append('termNumber', termNumber.toString());
+    if (proof) formData.append('proof', proof);
+
+    try {
+      await addPayment(formData);
+      onClose();
+    } catch (err: any) {
+      setFormError(err?.message || 'Failed to save payment');
+    }
   };
 
   React.useEffect(() => {

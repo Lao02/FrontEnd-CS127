@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Entry, Person, Group } from '../types';
-import { entryMockService } from '../services/entryMockService';
-import { paymentMockService } from '../services/paymentMockService';
+import { Entry } from '../types';
 import CreatePaymentModal from '../components/CreatePaymentModal';
 import CreateEntryModal from '../components/CreateEntryModal';
-import { personMockService } from '../services/personMockService';
-import { groupMockService } from '../services/groupMockService';
+import { useApp } from '../context/AppContext';
 import './EntriesList.css';
 
 const EntriesList: React.FC = () => {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const { entries, people, groups, getAllEntries, deleteEntry, getPaymentsByEntryId, deletePayment } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
   // Payment modal state
@@ -21,21 +16,19 @@ const EntriesList: React.FC = () => {
   const [payments, setPayments] = useState<{ [entryId: string]: any[] }>({});
 
   useEffect(() => {
-    entryMockService.getAll().then(setEntries);
-    personMockService.getAll().then(setPeople);
-    groupMockService.getAll().then(setGroups);
+    getAllEntries();
   }, []);
-
-  const refreshGroups = async () => {
-    setGroups(await groupMockService.getAll());
-  };
 
   // Load payments for all entries
   useEffect(() => {
     const fetchPayments = async () => {
       const allPayments: { [entryId: string]: any[] } = {};
       for (const entry of entries) {
-        allPayments[entry.id] = await paymentMockService.getByEntryId(entry.id);
+        try {
+          allPayments[entry.id] = await getPaymentsByEntryId(entry.id);
+        } catch (err) {
+          allPayments[entry.id] = [];
+        }
       }
       setPayments(allPayments);
     };
@@ -53,18 +46,13 @@ const EntriesList: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    await entryMockService.delete(id);
-    setEntries(await entryMockService.getAll());
+    await deleteEntry(id);
   };
 
-  const handleSave = async (data: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>, id?: string) => {
-    if (id) {
-      await entryMockService.update(id, data);
-    } else {
-      await entryMockService.create(data);
-    }
-    setEntries(await entryMockService.getAll());
+  const handleModalClose = () => {
     setModalOpen(false);
+    // Refresh entries after modal closes
+    getAllEntries();
   };
 
   const handleAddPayment = (entryId: string) => {
@@ -80,25 +68,42 @@ const EntriesList: React.FC = () => {
   };
 
   const handleDeletePayment = async (paymentId: number, entryId: string) => {
-    await paymentMockService.delete(paymentId);
-    setPayments({
-      ...payments,
-      [entryId]: await paymentMockService.getByEntryId(entryId),
-    });
+    await deletePayment(paymentId);
+    // Refresh payments for this entry
+    try {
+      const updatedPayments = await getPaymentsByEntryId(entryId);
+      setPayments({
+        ...payments,
+        [entryId]: updatedPayments,
+      });
+    } catch (err) {
+      setPayments({
+        ...payments,
+        [entryId]: [],
+      });
+    }
+    // Also refresh entries to get updated status
+    getAllEntries();
   };
 
-  const handleSavePayment = async (data: any, id?: number) => {
-    if (!currentEntryId) return;
-    if (id) {
-      await paymentMockService.update(id, data);
-    } else {
-      await paymentMockService.create(data);
-    }
-    setPayments({
-      ...payments,
-      [currentEntryId]: await paymentMockService.getByEntryId(currentEntryId),
-    });
+  const handleSavePayment = async () => {
     setPaymentModalOpen(false);
+    if (!currentEntryId) return;
+    // Refresh payments for this entry
+    try {
+      const updatedPayments = await getPaymentsByEntryId(currentEntryId);
+      setPayments({
+        ...payments,
+        [currentEntryId]: updatedPayments,
+      });
+    } catch (err) {
+      setPayments({
+        ...payments,
+        [currentEntryId]: [],
+      });
+    }
+    // Also refresh entries to get updated status
+    getAllEntries();
   };
 
   return (
@@ -129,17 +134,14 @@ const EntriesList: React.FC = () => {
       </ul>
       <CreateEntryModal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSave={handleSave}
+        onClose={handleModalClose}
         initialEntry={editingEntry}
         people={people}
         groups={groups}
-        onGroupsUpdated={refreshGroups}
       />
       <CreatePaymentModal
         isOpen={paymentModalOpen}
-        onClose={() => setPaymentModalOpen(false)}
-        onSave={handleSavePayment}
+        onClose={handleSavePayment}
         initialPayment={editingPayment}
         people={people}
         entryId={currentEntryId || ''}
