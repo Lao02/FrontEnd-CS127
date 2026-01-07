@@ -1,10 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Entry, Person, Group, Payment, PaymentAllocation, InstallmentStatus } from '../types';
-import { personMockService } from '../services/personMockService';
-import { groupMockService } from '../services/groupMockService';
-import { entryMockService } from '../services/entryMockService';
-import { paymentMockService } from '../services/paymentMockService';
+import { Entry, Person, Payment, PaymentAllocation, InstallmentStatus } from '../types';
+import { useApp } from '../context/AppContext';
 import CreateEntryModal from '../components/CreateEntryModal';
 import CreatePaymentModal from '../components/CreatePaymentModal';
 import CreatePaymentAllocationModal from '../components/CreatePaymentAllocationModal';
@@ -13,16 +10,14 @@ import './EntryDetails.css';
 function EntryDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { people, groups, getEntryById, deleteEntry, getPaymentsByEntryId, updateEntry } = useApp();
   const [entry, setEntry] = useState<Entry | null>(null);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const [modalSuccess, setModalSuccess] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [paymentLoading, setPaymentLoading] = useState(false);
   // Payment Allocation (for group entries)
   const [showAllocModal, setShowAllocModal] = useState(false);
   const [editingAlloc, setEditingAlloc] = useState<PaymentAllocation | null>(null);
@@ -84,10 +79,19 @@ function EntryDetails() {
         paymentTerms: updatedTerms.length, // Update total terms count
       },
     };
-    await entryMockService.update(entry.id, updatedEntry);
-    setEntry(updatedEntry);
-    setModalSuccess('Term ' + (termIdx + 1) + ' skipped. A new term has been added.');
-    setTimeout(() => setModalSuccess(null), 2000);
+    
+    // Build FormData with installmentDetails
+    const formData = new FormData();
+    formData.append('installmentDetails', JSON.stringify(updatedEntry.installmentDetails));
+    
+    try {
+      await updateEntry(entry.id, formData);
+      setEntry(updatedEntry);
+      setModalSuccess('Term ' + (termIdx + 1) + ' skipped. A new term has been added.');
+      setTimeout(() => setModalSuccess(null), 2000);
+    } catch (err) {
+      setModalError('Failed to skip term');
+    }
   };
 
   const handleSaveTermNotes = async (termIdx: number) => {
@@ -107,21 +111,38 @@ function EntryDetails() {
       },
     };
     
-    await entryMockService.update(entry.id, updatedEntry);
-    setEntry(updatedEntry);
-    setEditingTermNotes({ ...editingTermNotes, [termIdx]: false });
-    setModalSuccess('Term notes saved successfully.');
-    setTimeout(() => setModalSuccess(null), 1500);
+    // Build FormData
+    const formData = new FormData();
+    formData.append('installmentDetails', JSON.stringify(updatedEntry.installmentDetails));
+    
+    try {
+      await updateEntry(entry.id, formData);
+      setEntry(updatedEntry);
+      setEditingTermNotes({ ...editingTermNotes, [termIdx]: false });
+      setModalSuccess('Term notes saved successfully.');
+      setTimeout(() => setModalSuccess(null), 1500);
+    } catch (err) {
+      setModalError('Failed to save term notes');
+    }
   };
 
   useEffect(() => {
-    if (id) {
-      entryMockService.getById(id).then((e: Entry | undefined) => setEntry(e ?? null));
-      paymentMockService.getByEntryId(id).then((p: Payment[]) => setPayments(p));
-    }
-    personMockService.getAll().then(setPeople);
-    groupMockService.getAll().then(setGroups);
-  }, [id]);
+    const loadData = async () => {
+      if (id) {
+        try {
+          const fetchedEntry = await getEntryById(id);
+          setEntry(fetchedEntry);
+          const fetchedPayments = await getPaymentsByEntryId(id);
+          setPayments(fetchedPayments);
+        } catch (err) {
+          console.error('Failed to load entry or payments:', err);
+          setEntry(null);
+          setPayments([]);
+        }
+      }
+    };
+    loadData();
+  }, [id, getEntryById, getPaymentsByEntryId]);
 
   // Payment handlers
   const handleAddPayment = () => {
@@ -129,83 +150,25 @@ function EntryDetails() {
     setShowPaymentModal(true);
   };
 
-  const handleSavePayment = async (payment: Omit<Payment, 'id' | 'entryId' | 'createdAt' | 'updatedAt'>) => {
+  const handleSavePayment = async () => {
     setModalError(null);
-    setPaymentLoading(true);
     try {
-      if (id) await paymentMockService.create({ ...payment, entryId: id });
-      setModalSuccess('Payment added successfully!');
+      // Payment is handled by CreatePaymentModal using AppContext
+      // Just close modal and refresh data
       if (id) {
-        // Refresh payments list
-        setPayments(await paymentMockService.getByEntryId(id));
-        
-        // If payment is for a specific term, mark that term as paid
-        if (payment.termNumber && entry?.installmentDetails) {
-          const termIdx = payment.termNumber - 1; 
-          
-          // Get fresh entry data first to get updated amountRemaining and status from payment service
-          const freshEntry = await entryMockService.getById(id);
-          if (freshEntry) {
-            // Update the term status in the fresh entry
-            const updatedTerms = freshEntry.installmentDetails?.terms.map((t, i) =>
-              i === termIdx
-                ? {
-                    ...t,
-                    paymentDate: payment.paymentDate,
-                    status: InstallmentStatus.PAID,
-                  }
-                : t
-            ) || [];
-            
-            const finalEntry = {
-              ...freshEntry,
-              installmentDetails: freshEntry.installmentDetails ? {
-                ...freshEntry.installmentDetails,
-                terms: updatedTerms,
-              } : undefined,
-            };
-            
-            // Update the entry with the new term status while preserving amountRemaining
-            await entryMockService.update(id, {
-              installmentDetails: finalEntry.installmentDetails,
-            });
-            
-            setEntry(finalEntry);
-          }
-        } else {
-          // Always refresh entry to get updated amountRemaining and status
-          const updatedEntry = await entryMockService.getById(id);
-          setEntry(updatedEntry ?? null);
-        }
-        
-        // For group expense, update payment allocation's amountPaid
-        if (entry?.transactionType === 'Group Expense' && entry.paymentAllocations && paymentFromAllocation) {
-          const currentEntry = entry;
-          if (currentEntry.paymentAllocations) {
-            const updatedAllocations = currentEntry.paymentAllocations.map(alloc => {
-              if (alloc.id === paymentFromAllocation.id) {
-                return {
-                  ...alloc,
-                  amountPaid: (alloc.amountPaid || 0) + payment.paymentAmount
-                };
-              }
-              return alloc;
-            });
-            await entryMockService.update(id, { paymentAllocations: updatedAllocations });
-            // Refresh entry again to get updated allocations
-            const finalEntry = await entryMockService.getById(id);
-            setEntry(finalEntry ?? null);
-          }
-        }
+        // Refresh entry and payments
+        const updatedEntry = await getEntryById(id);
+        setEntry(updatedEntry);
+        const updatedPayments = await getPaymentsByEntryId(id);
+        setPayments(updatedPayments);
+        setModalSuccess('Payment added successfully!');
       }
       setShowPaymentModal(false);
-      setCurrentTermNumber(undefined); // Clear term number
-      setPaymentFromAllocation(null); // Clear allocation reference
+      setCurrentTermNumber(undefined);
+      setPaymentFromAllocation(null);
       setTimeout(() => setModalSuccess(null), 1500);
     } catch (err) {
-      setModalError('Failed to save payment');
-    } finally {
-      setPaymentLoading(false);
+      setModalError('Failed to refresh after payment');
     }
   };
 
@@ -244,6 +207,12 @@ function EntryDetails() {
           updatedAllocations.push({ ...alloc, id: Date.now().toString(), createdAt: now, updatedAt: now });
           setModalSuccess('Allocation added successfully!');
         }
+        
+        // Update entry with new allocations
+        const formData = new FormData();
+        formData.append('paymentAllocations', JSON.stringify(updatedAllocations));
+        await updateEntry(entry.id, formData);
+        
         setEntry({ ...entry, paymentAllocations: updatedAllocations });
         setShowAllocModal(false);
         setTimeout(() => setModalSuccess(null), 1500);
@@ -271,9 +240,11 @@ function EntryDetails() {
     setDeleteLoading(true);
     setModalError(null);
     try {
-      await entryMockService.delete(entry.id);
-      setModalSuccess('Entry deleted successfully!');
-      setTimeout(() => navigate('/'), 1000);
+      if (entry) {
+        await deleteEntry(entry.id);
+        setModalSuccess('Entry deleted successfully!');
+        setTimeout(() => navigate('/'), 1000);
+      }
     } catch (err: any) {
       setModalError('Failed to delete entry');
     } finally {
@@ -281,17 +252,11 @@ function EntryDetails() {
     }
   };
 
-  const handleSaveEdit = async (updated: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>) => {
-    setModalError(null);
-    try {
-      await entryMockService.update(entry.id, updated);
-      const updatedEntry = await entryMockService.getById(entry.id);
-      setEntry(updatedEntry ?? null);
-      setShowEditModal(false);
-      setModalSuccess('Entry updated successfully!');
-      setTimeout(() => setModalSuccess(null), 1500);
-    } catch (err: any) {
-      setModalError('Failed to update entry');
+  const handleEditModalClose = () => {
+    setShowEditModal(false);
+    // Refresh entry after modal closes
+    if (id) {
+      getEntryById(id).then((e: Entry) => setEntry(e)).catch(() => setEntry(null));
     }
   };
 
@@ -309,12 +274,10 @@ function EntryDetails() {
       {showEditModal && (
         <CreateEntryModal
           isOpen={showEditModal}
-          onClose={() => setShowEditModal(false)}
-          onSave={handleSaveEdit}
+          onClose={handleEditModalClose}
           initialEntry={entry}
           people={people}
           groups={groups}
-          onGroupsUpdated={async () => setGroups(await groupMockService.getAll())}
           hasPayments={payments.length > 0}
           key={entry?.id || 'edit-modal'}
         />
@@ -491,11 +454,7 @@ function EntryDetails() {
         {showPaymentModal && (
           <CreatePaymentModal
             isOpen={showPaymentModal}
-            onClose={() => {
-              setShowPaymentModal(false);
-              setPaymentFromAllocation(null);
-            }}
-            onSave={handleSavePayment}
+            onClose={handleSavePayment}
             initialPayment={null}
             people={(() => {
               if (!entry) return people;

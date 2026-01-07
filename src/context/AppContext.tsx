@@ -1,8 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { Entry, Person, Group } from '../types'
-import { peopleApi, groupsApi, entriesApi, paymentsApi } from '../services/api'
-import { personMockService } from '../services/personMockService'
-import { groupMockService } from '../services/groupMockService'
+import { peopleApi, groupsApi, entriesApi, paymentsApi, apiRequest } from '../services/api'
 
 interface AppContextType {
   // Data
@@ -19,6 +17,9 @@ interface AppContextType {
   updateEntry: (id: string, formData: FormData) => Promise<void>
   deleteEntry: (id: string) => Promise<void>
   getEntry: (id: string) => Entry | undefined
+  getEntryById: (id: string) => Promise<Entry>
+  getAllEntries: () => Promise<Entry[]>
+  deleteAllPaidEntries: () => Promise<void>
   refreshEntries: () => Promise<void>
   
   // Person operations
@@ -39,6 +40,7 @@ interface AppContextType {
   addPayment: (formData: FormData) => Promise<void>
   updatePayment: (paymentId: number, formData: FormData) => Promise<void>
   deletePayment: (paymentId: number) => Promise<void>
+  getPaymentsByEntryId: (entryId: string) => Promise<any[]>
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined)
@@ -62,17 +64,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Note: No getAll endpoint for entries - entries loaded individually
       let peopleData: Person[] = []
       let groupsData: Group[] = []
-      try {
-        peopleData = await peopleApi.getAll()
-      } catch (err) {
-        // fallback to in-memory mock service when backend unavailable
-        peopleData = await personMockService.getAll()
-      }
-      try {
-        groupsData = await groupsApi.getAll()
-      } catch (err) {
-        groupsData = await groupMockService.getAll()
-      }
+      peopleData = await peopleApi.getAll()
+      groupsData = await groupsApi.getAll()
       setPeople(peopleData)
       setGroups(groupsData)
       setEntries([]) // Entries loaded individually when needed
@@ -87,11 +80,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Entry operations
   const refreshEntries = async () => {
     try {
-      // Note: No getAll endpoint available, entries are loaded individually
-      // This function is kept for consistency but won't do anything
-      console.warn('refreshEntries: No getAll endpoint available. Entries loaded individually.')
+      const allEntries = await entriesApi.getAll()
+      setEntries(allEntries)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh entries')
+      throw err
+    }
+  }
+
+  const getAllEntries = async () => {
+    try {
+      const allEntries = await entriesApi.getAll()
+      setEntries(allEntries)
+      return allEntries
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get all entries')
+      throw err
+    }
+  }
+
+  const getEntryById = async (id: string) => {
+    try {
+      const entry = await entriesApi.getById(id)
+      // Update in local state if found
+      const existingIndex = entries.findIndex(e => e.id === id)
+      if (existingIndex >= 0) {
+        setEntries(entries.map(e => e.id === id ? entry : e))
+      } else {
+        setEntries([...entries, entry])
+      }
+      return entry
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get entry')
+      throw err
+    }
+  }
+
+  const deleteAllPaidEntries = async () => {
+    try {
+      setError(null)
+      await entriesApi.deleteAllPaid()
+      // Remove all paid entries from local state
+      setEntries(entries.filter(entry => entry.status !== 'PAID'))
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to delete paid entries'
+      setError(errorMessage)
       throw err
     }
   }
@@ -139,13 +172,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Person operations
   const refreshPeople = async () => {
     try {
-      try {
-        const peopleData = await peopleApi.getAll()
-        setPeople(peopleData)
-      } catch (err) {
-        const peopleData = await personMockService.getAll()
-        setPeople(peopleData)
-      }
+      const peopleData = await peopleApi.getAll()
+      setPeople(peopleData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh people')
       throw err
@@ -191,13 +219,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Group operations
   const refreshGroups = async () => {
     try {
-      try {
-        const groupsData = await groupsApi.getAll()
-        setGroups(groupsData)
-      } catch (err) {
-        const groupsData = await groupMockService.getAll()
-        setGroups(groupsData)
-      }
+      const groupsData = await groupsApi.getAll()
+      setGroups(groupsData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to refresh groups')
       throw err
@@ -243,23 +266,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addGroupMember = async (groupID: number, personID: number) => {
     try {
       setError(null)
-      // Try backend API first, otherwise use mock service
-      let updatedGroup: Group | undefined = undefined
-      try {
-        // groupsApi may not implement addMember on backend; use any to attempt
-        updatedGroup = await (groupsApi as any).addMember(groupID, personID)
-      } catch (err) {
-        const person = (await personMockService.getById(personID.toString())) as Person | undefined
-        if (person) {
-          updatedGroup = await groupMockService.addMember(groupID.toString(), person) as Group | undefined
-        }
-      }
-      if (updatedGroup) {
-        setGroups(groups.map(group => group.groupID === groupID ? updatedGroup as any : group))
-      } else {
-        // As a safety, refresh groups
-        await refreshGroups()
-      }
+      // Backend API endpoint for adding group members
+      await apiRequest(`/groups/${groupID}/members/${personID}`, {
+        method: 'POST',
+      })
+      // Refresh the group to get updated members list
+      await refreshGroups()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to add group member'
       setError(errorMessage)
@@ -270,17 +282,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const removeGroupMember = async (groupID: number, personID: number) => {
     try {
       setError(null)
-      try {
-        // try backend
-        await (groupsApi as any).removeMember(groupID, personID)
-        const updatedGroup = await groupsApi.getById(groupID)
-        setGroups(groups.map(group => group.groupID === groupID ? updatedGroup : group))
-      } catch (err) {
-        // fallback to mock
-        await groupMockService.removeMember(groupID.toString(), personID.toString())
-        const updatedGroup = await groupMockService.getById(groupID.toString())
-        setGroups(groups.map(group => group.groupID === groupID ? (updatedGroup as any) : group))
-      }
+      // Backend API endpoint for removing group members
+      await apiRequest(`/groups/${groupID}/members/${personID}`, {
+        method: 'DELETE',
+      })
+      // Refresh the group to get updated members list
+      await refreshGroups()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to remove group member'
       setError(errorMessage)
@@ -289,6 +296,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   // Payment operations
+  const getPaymentsByEntryId = async (entryId: string) => {
+    try {
+      const payments = await paymentsApi.getByEntryId(entryId)
+      return payments
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get payments')
+      throw err
+    }
+  }
+
   const addPayment = async (formData: FormData) => {
     try {
       setError(null)
@@ -339,6 +356,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateEntry,
         deleteEntry,
         getEntry,
+        getEntryById,
+        getAllEntries,
+        deleteAllPaidEntries,
         refreshEntries,
         addPerson,
         updatePerson,
@@ -353,6 +373,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addPayment,
         updatePayment,
         deletePayment,
+        getPaymentsByEntryId,
       }}
     >
       {children}

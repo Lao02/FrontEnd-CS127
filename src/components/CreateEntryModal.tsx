@@ -1,21 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { groupMockService } from '../services/groupMockService';
 import { Entry, TransactionType, Person, Group, PaymentFrequency } from '../types';
+import { useApp } from '../context/AppContext';
 import './CreateEntryModal.css';
 
 interface CreateEntryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>, id?: string) => void;
   initialEntry?: Entry | null;
   people: Person[];
   groups: Group[];
-  onGroupsUpdated?: () => Promise<void> | void;
   formRef?: React.RefObject<HTMLFormElement>;
   hasPayments?: boolean;
 }
 
-const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, onSave, initialEntry, people, groups, formRef, hasPayments = false }) => {
+const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, initialEntry, people, groups, formRef, hasPayments = false }) => {
+  const { addEntry, updateEntry } = useApp();
   const [entryName, setEntryName] = useState('');
   const [transactionType, setTransactionType] = useState<TransactionType>(TransactionType.STRAIGHT_EXPENSE);
   const [borrowerId, setBorrowerId] = useState('');
@@ -115,21 +114,20 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
     }
   }, [amountBorrowed, paymentTerms, transactionType]);
 
-  // Helper: get group members for selected group (with live state)
-  const [groupMembers, setGroupMembers] = useState<Person[]>([]);
-  useEffect(() => {
-    let mounted = true;
-    async function fetchMembers() {
-      if (transactionType === TransactionType.GROUP_EXPENSE && borrowerId) {
-        const group = await groupMockService.getById(borrowerId);
-        if (mounted) setGroupMembers((group && (group as any).members) ? (group as any).members : []);
-      } else {
-        setGroupMembers([]);
-      }
+const [groupMembers, setGroupMembers] = useState<Person[]>([]);
+useEffect(() => {
+  if (transactionType === TransactionType.GROUP_EXPENSE && borrowerId) {
+    // Find the group from the groups prop (which comes from AppContext)
+    const selectedGroup = groups.find(g => g.groupID.toString() === borrowerId);
+    if (selectedGroup && 'members' in selectedGroup) {
+      setGroupMembers((selectedGroup as any).members || []);
+    } else {
+      setGroupMembers([]);
     }
-    fetchMembers();
-    return () => { mounted = false; };
-  }, [transactionType, borrowerId, groups]);
+  } else {
+    setGroupMembers([]);
+  }
+}, [transactionType, borrowerId, groups]);
 
   // Allocation logic
   useEffect(() => {
@@ -211,7 +209,7 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
     // Validation
@@ -250,50 +248,55 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, on
         return;
       }
     }
-    // Prepare entry object for saving
-    const lenderPerson = people.find(p => p.personID.toString() === lenderId);
-    if (!lenderPerson) {
-      setFormError('Selected lender not found.');
-      return;
+
+    try {
+      // Build FormData for backend
+      const formData = new FormData();
+      formData.append('entryName', entryName);
+      formData.append('description', description);
+      formData.append('transactionType', transactionType);
+      formData.append('lenderId', lenderId);
+      formData.append('borrowerId', borrowerId);
+      formData.append('amountBorrowed', amountBorrowed);
+      formData.append('notes', notes);
+      
+      if (dateBorrowed) {
+        formData.append('dateBorrowed', dateBorrowed);
+      }
+      
+      if (imageFile) {
+        formData.append('imageFiles', imageFile);
+      }
+      
+      // For installment expense
+      if (transactionType === TransactionType.INSTALLMENT_EXPENSE) {
+        if (startDate) formData.append('startDate', startDate);
+        formData.append('paymentFrequency', paymentFrequency);
+        if (paymentTerms) formData.append('paymentTerms', paymentTerms);
+        if (paymentAmountPerTerm) formData.append('paymentAmountPerTerm', paymentAmountPerTerm);
+      }
+      
+      // For group expense with allocations
+      if (transactionType === TransactionType.GROUP_EXPENSE && paymentAllocations.length > 0) {
+        paymentAllocations.forEach((allocation, index) => {
+          formData.append(`allocations[${index}].personId`, allocation.payee.personID.toString());
+          formData.append(`allocations[${index}].amount`, allocation.amount.toString());
+          formData.append(`allocations[${index}].description`, allocation.description || '');
+        });
+      }
+      
+      if (initialEntry) {
+        // Update existing entry
+        await updateEntry(initialEntry.id, formData);
+      } else {
+        // Create new entry
+        await addEntry(formData);
+      }
+      
+      onClose();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Failed to save entry');
     }
-    
-    // Convert image file to Blob if present
-    let proofOfLoan: Blob | undefined = undefined;
-    if (imageFile) {
-      proofOfLoan = imageFile;
-    } else if (initialEntry?.proofOfLoan) {
-      proofOfLoan = initialEntry.proofOfLoan;
-    }
-    
-    const backendEntry: any = {
-      entryName,
-      transactionType,
-      borrower: (() => {
-        if (transactionType === TransactionType.GROUP_EXPENSE) {
-          const group = groups.find(g => g.groupID.toString() === borrowerId);
-          return group ? group : { groupID: borrowerId };
-        } else {
-          const person = people.find(p => p.personID.toString() === borrowerId);
-          return person ? person : { personID: borrowerId };
-        }
-      })(),
-      lender: lenderPerson,
-      amountBorrowed: parseFloat(amountBorrowed),
-      amountRemaining: initialEntry ? initialEntry.amountRemaining : parseFloat(amountBorrowed),
-      description,
-      dateBorrowed,
-      dateFullyPaid,
-      notes,
-      proofOfLoan,
-      paymentAllocations: transactionType === TransactionType.GROUP_EXPENSE ? paymentAllocations : undefined,
-      installmentDetails: transactionType === TransactionType.INSTALLMENT_EXPENSE ? {
-        startDate,
-        paymentFrequency,
-        paymentTerms: paymentTerms ? parseInt(paymentTerms) : 0,
-        paymentAmountPerTerm: paymentAmountPerTerm ? parseFloat(paymentAmountPerTerm) : 0,
-      } : undefined,
-    };
-    onSave(backendEntry, initialEntry?.id);
   };
 
   const isEditing = !!initialEntry;

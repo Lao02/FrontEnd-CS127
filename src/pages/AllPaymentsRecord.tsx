@@ -1,18 +1,11 @@
 import { Link } from 'react-router-dom';
 import { useState, useMemo, useEffect } from 'react';
-import { personMockService } from '../services/personMockService';
-import { groupMockService } from '../services/groupMockService';
-import { entryMockService } from '../services/entryMockService';
+import { useApp } from '../context/AppContext';
 import CreateEntryModal from '../components/CreateEntryModal';
 import './AllPaymentsRecord.css';
 
-
-
-import { Entry, Person, Group } from '../types';
 function AllPaymentsRecord() {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [people, setPeople] = useState<Person[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
+  const { entries, people, groups, getAllEntries, deleteAllPaidEntries } = useApp();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -23,27 +16,13 @@ function AllPaymentsRecord() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
-    entryMockService.getAll().then((data: Entry[]) => setEntries(data));
-    personMockService.getAll().then((data: Person[]) => setPeople(data));
-    groupMockService.getAll().then((data: Group[]) => setGroups(data));
+    getAllEntries();
   }, []);
 
-  const handleCreateEntry = async (entry: Omit<Entry, 'id' | 'referenceId' | 'createdAt' | 'updatedAt'>) => {
-    setModalLoading(true);
-    setModalError(null);
-    try {
-      await entryMockService.create(entry);
-      setEntries(await entryMockService.getAll());
-      setShowCreateModal(false);
-    } catch (err: any) {
-      setModalError(err?.message || 'Failed to create entry');
-    } finally {
-      setModalLoading(false);
-    }
-  };
-
-  const refreshGroups = async () => {
-    setGroups(await groupMockService.getAll());
+  const handleModalClose = () => {
+    setShowCreateModal(false);
+    // Refresh entries after modal closes
+    getAllEntries();
   };
 
   const handleDeleteAllPaidRecords = async () => {
@@ -62,14 +41,8 @@ function AllPaymentsRecord() {
     setModalError(null);
 
     try {
-      // Delete all paid entries
-      for (const entry of paidEntries) {
-        await entryMockService.delete(entry.id);
-      }
-      
-      // Refresh entries list
-      const updatedEntries = await entryMockService.getAll();
-      setEntries(updatedEntries);
+      // Delete all paid entries using AppContext
+      await deleteAllPaidEntries();
       
       alert(`Successfully deleted ${paidEntries.length} paid record${paidEntries.length > 1 ? 's' : ''}.`);
     } catch (err: any) {
@@ -244,11 +217,9 @@ function AllPaymentsRecord() {
 
       <CreateEntryModal
         isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onSave={handleCreateEntry}
+        onClose={handleModalClose}
         people={people}
         groups={groups}
-        onGroupsUpdated={refreshGroups}
       />
       {modalError && (
         <div className="modal-overlay"><div className="modal-content error-message">{modalError}</div></div>

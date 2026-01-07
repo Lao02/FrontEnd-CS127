@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Payment } from '../types';
-import { paymentMockService } from '../services/paymentMockService';
+import { useApp } from '../context/AppContext';
 import './PaymentsList.css';
 
 interface PaymentsListProps {
@@ -8,11 +8,12 @@ interface PaymentsListProps {
 }
 
 const PaymentsList: React.FC<PaymentsListProps> = ({ entryId }) => {
+  const { getPaymentsByEntryId } = useApp();
   const [payments, setPayments] = useState<Payment[]>([]);
 
   useEffect(() => {
-    paymentMockService.getByEntryId(entryId).then(setPayments);
-  }, [entryId]);
+    getPaymentsByEntryId(entryId).then(setPayments).catch(() => setPayments([]));
+  }, [entryId, getPaymentsByEntryId]);
 
 
   return (
