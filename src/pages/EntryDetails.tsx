@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { Entry, Payment, PaymentAllocation, TransactionType } from '../types';
+import { Entry, Payment, PaymentAllocation, TransactionType, InstallmentTerm } from '../types';
 import { useApp } from '../context/AppContext';
+import { installmentTermsApi, paymentAllocationApi } from '../services/api';
 import CreateEntryModal from '../components/CreateEntryModal';
 import CreatePaymentModal from '../components/CreatePaymentModal';
 import CreatePaymentAllocationModal from '../components/CreatePaymentAllocationModal';
@@ -10,9 +11,10 @@ import './EntryDetails.css';
 function EntryDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { people, groups, getEntryById, deleteEntry, getPaymentsByEntryId, updateEntry } = useApp();
+  const { people, groups, getEntryById, deleteEntry, getPaymentsByEntryId } = useApp();
   const [entry, setEntry] = useState<Entry | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [installmentTerms, setInstallmentTerms] = useState<InstallmentTerm[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -31,6 +33,17 @@ function EntryDetails() {
           setEntry(fetchedEntry);
           const fetchedPayments = await getPaymentsByEntryId(id);
           setPayments(fetchedPayments);
+          
+          // Fetch installment terms if it's an installment expense
+          if (fetchedEntry.transactionType === TransactionType.INSTALLMENT) {
+            try {
+              const terms = await installmentTermsApi.getTermsByEntryId(id);
+              setInstallmentTerms(terms);
+            } catch (err) {
+              console.error('Failed to load installment terms:', err);
+              setInstallmentTerms([]);
+            }
+          }
         } catch (err) {
           console.error('Failed to load entry or payments:', err);
           setEntry(null);
@@ -44,6 +57,11 @@ function EntryDetails() {
   // Payment handlers
   const handleAddPayment = () => {
     setShowPaymentModal(true);
+  };
+
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+    setPaymentFromAllocation(null);
   };
 
   const handleSavePayment = async () => {
@@ -79,39 +97,44 @@ function EntryDetails() {
     setShowAllocModal(true);
   };
   
+  const handleCloseAllocModal = () => {
+    setShowAllocModal(false);
+    setEditingAlloc(null);
+  };
+  
   const handleSaveAlloc: (
     allocation: Omit<PaymentAllocation, 'allocationId'>,
     id?: number
   ) => void = async (alloc, allocId) => {
     setModalError(null);
     try {
-      if (entry) {
-        let updatedAllocations: PaymentAllocation[] = entry.paymentAllocations ? [...entry.paymentAllocations] : [];
-        if (allocId) {
-          // Edit - only update description and notes
-          updatedAllocations = updatedAllocations.map((a: PaymentAllocation) => 
-            a.allocationId === allocId 
-              ? { ...a, description: alloc.description, notes: alloc.notes } 
-              : a
-          );
-          setModalSuccess('Allocation updated successfully!');
-        } else {
-          // Add - backend will assign allocationId
-          updatedAllocations.push({ ...alloc, allocationId: Date.now() });
-          setModalSuccess('Allocation added successfully!');
-        }
+      if (entry && allocId) {
+        console.log('Updating allocation:', allocId, alloc.description, alloc.notes);
         
-        // Update entry with new allocations
-        const formData = new FormData();
-        formData.append('paymentAllocations', JSON.stringify(updatedAllocations));
-        await updateEntry(entry.id, formData);
+        // Edit - call backend API to update description and notes
+        const response = await paymentAllocationApi.updateDescriptionAndNotes(
+          allocId,
+          alloc.description || '',
+          alloc.notes || ''
+        );
+        
+        console.log('Update response:', response);
+        
+        // Update local state
+        const updatedAllocations = entry.paymentAllocations?.map((a: PaymentAllocation) => 
+          a.allocationId === allocId 
+            ? { ...a, description: alloc.description, notes: alloc.notes } 
+            : a
+        ) || [];
         
         setEntry({ ...entry, paymentAllocations: updatedAllocations });
-        setShowAllocModal(false);
+        setModalSuccess('Allocation updated successfully!');
+        handleCloseAllocModal();
         setTimeout(() => setModalSuccess(null), 1500);
       }
-    } catch (err) {
-      setModalError('Failed to save allocation');
+    } catch (err: any) {
+      console.error('Failed to update allocation:', err);
+      setModalError(err?.message || 'Failed to save allocation');
     }
   };
 
@@ -135,12 +158,10 @@ function EntryDetails() {
     try {
       if (entry) {
         await deleteEntry(entry.id);
-        setModalSuccess('Entry deleted successfully!');
-        setTimeout(() => navigate('/'), 1000);
+        navigate('/all-payments');
       }
     } catch (err: any) {
       setModalError('Failed to delete entry');
-    } finally {
       setDeleteLoading(false);
     }
   };
@@ -158,8 +179,8 @@ function EntryDetails() {
       <div className="page-header">
         <h1>Entry Details</h1>
         <div className="header-actions">
-          <button className="btn-secondary" onClick={handleEdit}>Edit</button>
-          <button className="btn-danger" onClick={handleDelete} disabled={deleteLoading}>Delete</button>
+          <button type="button" className="btn-secondary" onClick={handleEdit}>Edit</button>
+          <button type="button" className="btn-danger" onClick={handleDelete} disabled={deleteLoading}>Delete</button>
         </div>
       </div>
       {modalError && <div className="error-message">{modalError}</div>}
@@ -281,7 +302,7 @@ function EntryDetails() {
           {entry.transactionType !== TransactionType.INSTALLMENT && 
            entry.transactionType !== TransactionType.GROUP && 
            entry.status !== 'PAID' && (
-            <button className="btn-primary" onClick={handleAddPayment}>+ Add Payment</button>
+            <button type="button" className="btn-primary" onClick={handleAddPayment}>+ Add Payment</button>
           )}
         </div>
         {payments && payments.length > 0 ? (
@@ -345,14 +366,20 @@ function EntryDetails() {
         {showPaymentModal && (
           <CreatePaymentModal
             isOpen={showPaymentModal}
-            onClose={handleSavePayment}
+            onClose={handleClosePaymentModal}
+            onSave={handleSavePayment}
             initialPayment={null}
             people={people}
             entryId={entry.id}
             termNumber={undefined}
             suggestedAmount={entry.transactionType === TransactionType.INSTALLMENT ? entry.paymentAmountPerTerm : undefined}
             suggestedDate={undefined}
-            lockedPayee={paymentFromAllocation?.groupMemberDto}
+            lockedPayee={
+              paymentFromAllocation?.groupMemberDto || 
+              (entry.transactionType === TransactionType.STRAIGHT && entry.borrowerId 
+                ? people.find(p => p.personID === entry.borrowerId) 
+                : undefined)
+            }
             maxPaymentAmount={paymentFromAllocation ? (paymentFromAllocation.amount - (paymentFromAllocation.amountPaid || 0)) : undefined}
             defaultPayee={undefined}
           />
@@ -381,6 +408,37 @@ function EntryDetails() {
               <span>₱{entry.paymentAmountPerTerm?.toLocaleString()}</span>
             </div>
           </div>
+          
+          {/* Installment Terms Table */}
+          {installmentTerms && installmentTerms.length > 0 && (
+            <div style={{ marginTop: '1.5em' }}>
+              <h3>Payment Terms Schedule</h3>
+              <table className="payments-table">
+                <thead>
+                  <tr>
+                    <th>Term #</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {installmentTerms.map((term: InstallmentTerm) => (
+                    <tr key={term.termId}>
+                      <td>Term {term.termNumber}</td>
+                      <td>{new Date(term.dueDate).toLocaleDateString()}</td>
+                      <td>
+                        <span className={`status-badge status-${term.status.toLowerCase()}`}>
+                          {term.status}
+                        </span>
+                      </td>
+                      <td>{term.notes || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 
@@ -421,6 +479,7 @@ function EntryDetails() {
                       <td>
                         {status !== 'PAID' && (
                           <button 
+                            type="button"
                             className="btn-primary" 
                             style={{ marginRight: '0.5em' }}
                             onClick={() => handlePayFromAllocation(alloc)}
@@ -428,7 +487,7 @@ function EntryDetails() {
                             Pay
                           </button>
                         )}
-                        <button className="btn-secondary" onClick={() => handleEditAlloc(alloc)}>Edit</button>
+                        <button type="button" className="btn-secondary" onClick={() => handleEditAlloc(alloc)}>Edit</button>
                       </td>
                     </tr>
                   );
@@ -441,7 +500,7 @@ function EntryDetails() {
           {showAllocModal && (
             <CreatePaymentAllocationModal
               isOpen={showAllocModal}
-              onClose={() => setShowAllocModal(false)}
+              onClose={handleCloseAllocModal}
               onSave={handleSaveAlloc}
               initialAllocation={editingAlloc}
               people={people}

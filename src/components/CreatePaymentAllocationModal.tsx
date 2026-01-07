@@ -89,7 +89,7 @@ const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> 
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{initialAllocation ? 'Edit Allocation' : 'Add Allocation'}</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Close modal">×</button>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close modal">×</button>
         </div>
         {formError && <div className="error-message">{formError}</div>}
         <form onSubmit={handleSubmit}>
@@ -104,7 +104,22 @@ const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> 
           </div>
           <div className="form-group">
             <label>Amount Due *</label>
-            <input type="number" min="0" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} required disabled={!!initialAllocation} />
+            <input 
+              type="number" 
+              min="0" 
+              step="0.01" 
+              value={amount} 
+              onChange={e => {
+                let value = e.target.value;
+                // Remove leading zeros but keep single 0 or decimal values
+                if (value.length > 1 && value.startsWith('0') && !value.startsWith('0.')) {
+                  value = value.replace(/^0+/, '');
+                }
+                setAmount(value);
+              }} 
+              required 
+              disabled={!!initialAllocation} 
+            />
           </div>
           <div className="form-group">
             <label>Amount Paid</label>
@@ -115,7 +130,23 @@ const CreatePaymentAllocationModal: React.FC<CreatePaymentAllocationModalProps> 
           </div>
           <div className="form-group">
             <label>Percent *</label>
-            <input type="number" min="0" max="100" step="0.01" value={percent} onChange={e => setPercent(e.target.value)} required disabled={!!initialAllocation} />
+            <input 
+              type="number" 
+              min="0" 
+              max="100" 
+              step="0.01" 
+              value={percent} 
+              onChange={e => {
+                let value = e.target.value;
+                // Remove leading zeros but keep single 0 or decimal values
+                if (value.length > 1 && value.startsWith('0') && !value.startsWith('0.')) {
+                  value = value.replace(/^0+/, '');
+                }
+                setPercent(value);
+              }} 
+              required 
+              disabled={!!initialAllocation} 
+            />
           </div>
           <div className="form-group">
             <label>Description</label>

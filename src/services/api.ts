@@ -32,13 +32,10 @@ import { Person, Group, Entry, Payment } from '../types'
 
 // Helper to map backend personId to frontend personID
 const mapPersonFromBackend = (person: any): Person => {
-  console.log('Mapping person from backend:', person);
-  const mapped = {
+  return {
     ...person,
     personID: person.personId || person.personID,
   };
-  console.log('Mapped person:', mapped);
-  return mapped;
 }
 
 // PEOPLE API
@@ -76,12 +73,27 @@ export const peopleApi = {
     })
   },
 }
-
+export const installmentTermsApi = {
+  getTermsByEntryId: async (entryId: string): Promise<any[]> => {
+    return apiRequest<any[]>(`/installment-terms/view/${entryId}`, {
+      method: 'GET',
+    })
+  },
+}
 // Helper to map backend groupId to frontend groupID
-const mapGroupFromBackend = (group: any): Group => ({
-  ...group,
-  groupID: group.groupId || group.groupID,
-})
+const mapGroupFromBackend = (group: any): Group => {
+  const mapped: Group = {
+    ...group,
+    groupID: group.groupId || group.groupID,
+  }
+  
+  // Map nested PersonDto objects in groupMembersList
+  if (group.groupMembersList && Array.isArray(group.groupMembersList)) {
+    mapped.groupMembersList = group.groupMembersList.map(mapPersonFromBackend)
+  }
+  
+  return mapped
+}
 
 // GROUPS API
 
@@ -121,7 +133,6 @@ export const groupsApi = {
 
 // Helper to map Entry from backend (fixes nested person/group IDs)
 const mapEntryFromBackend = (entry: any): Entry => {
-  console.log('Mapping entry from backend:', entry)
   const mapped: any = { ...entry }
   
   // Map payment allocations if present
@@ -140,7 +151,6 @@ const mapEntryFromBackend = (entry: any): Entry => {
     }))
   }
   
-  console.log('Mapped entry:', mapped)
   return mapped
 }
 
@@ -148,19 +158,9 @@ const mapEntryFromBackend = (entry: any): Entry => {
 
 export const entriesApi = {
   getAll: async (): Promise<Entry[]> => {
-    try {
-      console.log('Fetching all entries...')
-      const grouped = await apiRequest<{ [key: string]: any[] }>('/entry/all')
-      console.log('Received grouped entries:', grouped)
-      const flattened = Object.values(grouped).flat()
-      console.log('Flattened entries count:', flattened.length)
-      const mapped = flattened.map(mapEntryFromBackend)
-      console.log('Mapped entries:', mapped)
-      return mapped
-    } catch (error) {
-      console.error('Error fetching entries:', error)
-      throw error
-    }
+    const grouped = await apiRequest<{ [key: string]: any[] }>('/entry/all')
+    const flattened = Object.values(grouped).flat()
+    return flattened.map(mapEntryFromBackend)
   },
 
   getById: async (id: string): Promise<Entry> => {
@@ -323,5 +323,14 @@ export const paymentsApi = {
   // Get payments for specific allocation
   getPaymentsForAllocation: async (entryId: string, memberPersonId: number): Promise<Payment[]> => {
     return apiRequest<Payment[]>(`/payments/allocation/${entryId}/${memberPersonId}`)
+  },
+}
+
+export const paymentAllocationApi = {
+  updateDescriptionAndNotes: async (allocationId: number, description: string, notes: string): Promise<any> => {
+    return apiRequest(`/entry/payment-allocation/${allocationId}/edit-desc-notes`, {
+      method: 'PATCH',
+      body: JSON.stringify({ description, notes })
+    })
   },
 }

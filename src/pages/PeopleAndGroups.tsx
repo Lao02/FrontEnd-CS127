@@ -282,21 +282,20 @@ function PeopleAndGroups() {
           ) : (
             <div className="groups-list">
               {groups.map((group) => {
-                const groupWithMembers = group as Group & { members?: any[] };
                 return (
                   <div key={group.groupID} className="group-card">
                     <div className="group-header">
                       <h3>{group.groupName}</h3>
-                      {Array.isArray(groupWithMembers.members) && (
-                        <span className="member-count">{groupWithMembers.members.length} members</span>
+                      {group.groupMembersList && Array.isArray(group.groupMembersList) && (
+                        <span className="member-count">{group.groupMembersList.length} members</span>
                       )}
                     </div>
                     <div className="members">
                       <strong>Members:</strong>
                       <ul>
-                        {Array.isArray(groupWithMembers.members) ? groupWithMembers.members.map((member: any) => (
+                        {group.groupMembersList && Array.isArray(group.groupMembersList) ? group.groupMembersList.map((member: Person) => (
                           <li key={member.personID}>{member.firstName} {member.lastName}</li>
-                        )) : null}
+                        )) : <li style={{color:'#888'}}>No members</li>}
                       </ul>
                       <div style={{display:'flex',gap:'0.5em',marginTop:'0.5em'}}>
                         <button className="btn-secondary btn-add-member" onClick={() => handleAddMember(group.groupID)}>
@@ -341,7 +340,7 @@ function PeopleAndGroups() {
         <ManageMembersModal
           isOpen={showManageMembersModal}
           onClose={() => { setShowManageMembersModal(false); setManageGroupId(null); }}
-          groupMembers={(groups.find(g => g.groupID === manageGroupId) as Group & { members?: Person[] })?.members || []}
+          groupMembers={(groups.find(g => g.groupID === manageGroupId))?.groupMembersList || []}
           onRemove={(personId: string) => {
             handleRemoveMemberFromGroup(manageGroupId, personId);
           }}
@@ -353,7 +352,7 @@ function PeopleAndGroups() {
           isOpen={showAddMemberModal}
           onClose={() => setShowAddMemberModal(false)}
           people={people}
-          groupMembers={(groups.find(g => g.groupID === addMemberGroupId) as Group & { members?: Person[] })?.members || []}
+          groupMembers={(groups.find(g => g.groupID === addMemberGroupId))?.groupMembersList || []}
           onAdd={handleAddMemberToGroup}
         />
       )}

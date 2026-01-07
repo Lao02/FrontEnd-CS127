@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Entry, TransactionType, Person, Group, PaymentFrequency } from '../types';
 import { useApp } from '../context/AppContext';
 import './CreateEntryModal.css';
@@ -25,8 +25,8 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
   const [dateBorrowed, setDateBorrowed] = useState('');
   const [dateFullyPaid, setDateFullyPaid] = useState('');
   const [notes, setNotes] = useState('');
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
   // Installment fields
   const [startDate, setStartDate] = useState('');
   const [paymentFrequency, setPaymentFrequency] = useState<PaymentFrequency>(PaymentFrequency.MONTHLY);
@@ -36,49 +36,65 @@ const CreateEntryModal: React.FC<CreateEntryModalProps> = ({ isOpen, onClose, in
   const [paymentAllocations, setPaymentAllocations] = useState<any[]>([]);
   const [allocationMode, setAllocationMode] = useState<'equal' | 'percent' | 'amount' | ''>('');
   const [allocationWarning, setAllocationWarning] = useState<string | null>(null);
+  const hasInitialized = useRef(false);
+  const lastIsOpen = useRef(isOpen);
 
   useEffect(() => {
-    if (initialEntry) {
-      setEntryName(initialEntry.entryName);
-      setTransactionType(initialEntry.transactionType);
-      setBorrowerId(initialEntry.borrowerId?.toString() || '');
-      setLenderId(initialEntry.lenderId?.toString() || '');
-      setAmountBorrowed(initialEntry.amountBorrowed.toString());
-      setDescription(initialEntry.description || '');
-      setDateBorrowed(initialEntry.dateBorrowed ? new Date(initialEntry.dateBorrowed).toISOString().slice(0, 10) : '');
-      setDateFullyPaid(initialEntry.dateFullyPaid ? new Date(initialEntry.dateFullyPaid).toISOString().slice(0, 10) : '');
-      setNotes(initialEntry.notes || '');
-      // Handle existing image - use imageProofs from backend
-      setExistingImageUrl(null);
-      setImageFile(null);
-      if (initialEntry.startDate) {
-        setStartDate(new Date(initialEntry.startDate).toISOString().slice(0, 10));
-        setPaymentFrequency(initialEntry.paymentFrequency || PaymentFrequency.MONTHLY);
-        setPaymentTerms(initialEntry.paymentTerms?.toString() || '');
-        setPaymentAmountPerTerm(initialEntry.paymentAmountPerTerm?.toString() || '');
-      }
-      if (initialEntry.paymentAllocations) {
-        setPaymentAllocations(initialEntry.paymentAllocations);
-      }
-    } else {
-      setEntryName('');
-      setTransactionType(TransactionType.STRAIGHT);
-      setBorrowerId('');
-      setLenderId('');
-      setAmountBorrowed('');
-      setDescription('');
-      setDateBorrowed('');
-      setDateFullyPaid('');
-      setNotes('');
-      setStartDate('');
-      setPaymentFrequency(PaymentFrequency.MONTHLY);
-      setPaymentTerms('');
-      setPaymentAmountPerTerm('');
-      setPaymentAllocations([]);
-      setImageFile(null);
-      setExistingImageUrl(null);
+    // Only initialize when modal opens fresh (isOpen changed from false to true)
+    if (isOpen && !lastIsOpen.current) {
+      hasInitialized.current = false;
     }
-    setFormError(null);
+    lastIsOpen.current = isOpen;
+
+    if (isOpen && !hasInitialized.current) {
+      hasInitialized.current = true;
+      if (initialEntry) {
+        setEntryName(initialEntry.entryName);
+        setTransactionType(initialEntry.transactionType);
+        // For GROUP type, use borrowerGroupId; for STRAIGHT/INSTALLMENT, use borrowerId
+        if (initialEntry.transactionType === TransactionType.GROUP) {
+          setBorrowerId(initialEntry.borrowerGroupId?.toString() || '');
+        } else {
+          setBorrowerId(initialEntry.borrowerId?.toString() || '');
+        }
+        setLenderId(initialEntry.lenderId?.toString() || '');
+        setAmountBorrowed(initialEntry.amountBorrowed.toString());
+        setDescription(initialEntry.description || '');
+        setDateBorrowed(initialEntry.dateBorrowed ? new Date(initialEntry.dateBorrowed).toISOString().slice(0, 10) : '');
+        setDateFullyPaid(initialEntry.dateFullyPaid ? new Date(initialEntry.dateFullyPaid).toISOString().slice(0, 10) : '');
+        setNotes(initialEntry.notes || '');
+        // Handle existing image - use imageProofs from backend
+        setExistingImageUrls([]);
+        setImageFiles([]);
+        if (initialEntry.startDate) {
+          setStartDate(new Date(initialEntry.startDate).toISOString().slice(0, 10));
+          setPaymentFrequency(initialEntry.paymentFrequency || PaymentFrequency.MONTHLY);
+          setPaymentTerms(initialEntry.paymentTerms?.toString() || '');
+          setPaymentAmountPerTerm(initialEntry.paymentAmountPerTerm?.toString() || '');
+        }
+        if (initialEntry.paymentAllocations) {
+          setPaymentAllocations(initialEntry.paymentAllocations);
+        }
+      } else {
+        setEntryName('');
+        setTransactionType(TransactionType.STRAIGHT);
+        setBorrowerId('');
+        setLenderId('');
+        setAmountBorrowed('');
+        setDescription('');
+        setDateBorrowed('');
+        setDateFullyPaid('');
+        setNotes('');
+        setStartDate('');
+        setPaymentFrequency(PaymentFrequency.MONTHLY);
+        setPaymentTerms('');
+        setPaymentAmountPerTerm('');
+        setPaymentAllocations([]);
+        setImageFiles([]);
+        setExistingImageUrls([]);
+      }
+      setFormError(null);
+    }
   }, [initialEntry, isOpen]);
 
   // Auto-clear lender if borrower is changed to match lender (for individual borrowers)
@@ -108,8 +124,8 @@ useEffect(() => {
   if (transactionType === TransactionType.GROUP && borrowerId) {
     // Find the group from the groups prop (which comes from AppContext)
     const selectedGroup = groups.find(g => g.groupID.toString() === borrowerId);
-    if (selectedGroup && 'members' in selectedGroup) {
-      setGroupMembers((selectedGroup as any).members || []);
+    if (selectedGroup && selectedGroup.groupMembersList) {
+      setGroupMembers(selectedGroup.groupMembersList || []);
     } else {
       setGroupMembers([]);
     }
@@ -271,8 +287,10 @@ useEffect(() => {
         formData.append('dateBorrowed', dateBorrowed);
       }
       
-      if (imageFile) {
-        formData.append('imageFiles', imageFile);
+      if (imageFiles && imageFiles.length > 0) {
+        imageFiles.forEach((file) => {
+          formData.append('imageFiles', file);
+        });
       }
       
       // For installment expense
@@ -289,15 +307,15 @@ useEffect(() => {
         formData.delete('borrowerId');
         formData.append('borrowerGroupId', borrowerId); // borrowerId is actually groupId for GROUP type
         
-        // Add allocations if any
+        // Add allocations if any - backend expects paymentAllocations not allocations
         if (paymentAllocations.length > 0) {
           paymentAllocations.forEach((allocation, index) => {
-            formData.append(`allocations[${index}].groupMemberPersonId`, allocation.groupMemberPersonId.toString());
-            formData.append(`allocations[${index}].amount`, allocation.amount.toString());
-            formData.append(`allocations[${index}].percent`, allocation.percent.toString());
-            formData.append(`allocations[${index}].description`, allocation.description || '');
+            formData.append(`paymentAllocations[${index}].groupMemberPersonId`, allocation.groupMemberPersonId.toString());
+            formData.append(`paymentAllocations[${index}].amount`, allocation.amount.toString());
+            formData.append(`paymentAllocations[${index}].percent`, allocation.percent.toString());
+            formData.append(`paymentAllocations[${index}].description`, allocation.description || '');
             if (allocation.notes) {
-              formData.append(`allocations[${index}].notes`, allocation.notes);
+              formData.append(`paymentAllocations[${index}].notes`, allocation.notes);
             }
           });
         }
@@ -357,7 +375,7 @@ useEffect(() => {
                 {borrowerId && (
                   <div className="group-members-list" style={{ marginTop: '1em', padding: '1em', backgroundColor: '#f9f9f9', borderRadius: '4px' }}>
                     <strong>Group Members:</strong>
-                    <ul style={{ marginTop: '0.5em', paddingLeft: '1.5em' }}>
+                    <ul style={{ marginTop: '0.5em', paddingLeft: '1.5em', listStyle: 'none' }}>
                       {groupMembers.length > 0 ? groupMembers.map((m: Person) => (
                         <li key={m.personID} style={{ padding: '0.3em 0' }}>
                           {m.firstName} {m.lastName}
@@ -395,7 +413,22 @@ useEffect(() => {
           </div>
           <div className="form-group">
             <label>Amount Borrowed *</label>
-            <input type="number" min="0" step="0.01" value={amountBorrowed} onChange={e => setAmountBorrowed(e.target.value)} required disabled={hasPayments} />
+            <input 
+              type="number" 
+              min="0" 
+              step="0.01" 
+              value={amountBorrowed} 
+              onChange={e => {
+                let value = e.target.value;
+                // Remove leading zeros but keep single 0 or decimal values
+                if (value.length > 1 && value.startsWith('0') && !value.startsWith('0.')) {
+                  value = value.replace(/^0+/, '');
+                }
+                setAmountBorrowed(value);
+              }} 
+              required 
+              disabled={hasPayments} 
+            />
           </div>
           <div className="form-group">
             <label>Date Borrowed</label>
@@ -413,34 +446,49 @@ useEffect(() => {
             <input 
               type="file" 
               accept="image/*" 
+              multiple
               onChange={e => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  setImageFile(file);
-                  if (existingImageUrl) {
-                    URL.revokeObjectURL(existingImageUrl);
-                  }
-                  setExistingImageUrl(URL.createObjectURL(file));
+                const files = e.target.files;
+                if (files && files.length > 0) {
+                  const fileArray = Array.from(files);
+                  setImageFiles(prev => [...prev, ...fileArray]);
+                  const newUrls = fileArray.map(file => URL.createObjectURL(file));
+                  setExistingImageUrls(prev => [...prev, ...newUrls]);
                 }
               }} 
             />
-            {existingImageUrl && (
-              <div style={{ marginTop: '0.5em' }}>
-                <img src={existingImageUrl} alt="Proof of loan" style={{ maxWidth: '200px', maxHeight: '200px', objectFit: 'contain' }} />
-                <button 
-                  type="button" 
-                  className="btn-secondary" 
-                  style={{ marginLeft: '0.5em', padding: '0.2em 0.5em', fontSize: '0.9em' }}
-                  onClick={() => {
-                    setImageFile(null);
-                    if (existingImageUrl) {
-                      URL.revokeObjectURL(existingImageUrl);
-                    }
-                    setExistingImageUrl(null);
-                  }}
-                >
-                  Remove
-                </button>
+            <small>You can select multiple images as proof of loan</small>
+            {imageFiles.length > 0 && (
+              <small style={{ display: 'block', marginTop: '0.3em', color: '#666' }}>
+                {imageFiles.length} file{imageFiles.length > 1 ? 's' : ''} selected
+              </small>
+            )}
+            {existingImageUrls.length > 0 && (
+              <div style={{ marginTop: '0.5em', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                {existingImageUrls.map((url, idx) => (
+                  <div key={idx} style={{ position: 'relative' }}>
+                    <img src={url} alt={`Proof ${idx + 1}`} style={{ maxWidth: '150px', maxHeight: '150px', objectFit: 'contain', border: '1px solid #ddd', borderRadius: '4px' }} />
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      style={{ 
+                        position: 'absolute', 
+                        top: '2px', 
+                        right: '2px', 
+                        padding: '0.1em 0.4em', 
+                        fontSize: '0.8em',
+                        minWidth: 'auto'
+                      }}
+                      onClick={() => {
+                        URL.revokeObjectURL(url);
+                        setExistingImageUrls(prev => prev.filter((_, i) => i !== idx));
+                        setImageFiles(prev => prev.filter((_, i) => i !== idx));
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -508,7 +556,12 @@ useEffect(() => {
                                 step="0.01" 
                                 value={alloc.amount} 
                                 onChange={e => {
-                                  const newAmount = +e.target.value;
+                                  let value = e.target.value;
+                                  // Remove leading zeros but keep single 0 or decimal values
+                                  if (value.length > 1 && value.startsWith('0') && !value.startsWith('0.')) {
+                                    value = value.replace(/^0+/, '');
+                                  }
+                                  const newAmount = +value;
                                   const totalAmount = parseFloat(amountBorrowed);
                                   const newPercent = totalAmount > 0 ? +((newAmount / totalAmount) * 100).toFixed(2) : 0;
                                   setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, amount: newAmount, percent: newPercent } : a));
@@ -528,7 +581,12 @@ useEffect(() => {
                                 step="0.01" 
                                 value={alloc.percent} 
                                 onChange={e => {
-                                  const newPercent = +e.target.value;
+                                  let value = e.target.value;
+                                  // Remove leading zeros but keep single 0 or decimal values
+                                  if (value.length > 1 && value.startsWith('0') && !value.startsWith('0.')) {
+                                    value = value.replace(/^0+/, '');
+                                  }
+                                  const newPercent = +value;
                                   const totalAmount = parseFloat(amountBorrowed);
                                   const newAmount = +(totalAmount * (newPercent / 100)).toFixed(2);
                                   setPaymentAllocations(p => p.map((a, j) => j === i ? { ...a, percent: newPercent, amount: newAmount } : a));

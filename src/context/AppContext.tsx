@@ -61,14 +61,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
-      // Note: No getAll endpoint for entries - entries loaded individually
-      let peopleData: Person[] = []
-      let groupsData: Group[] = []
-      peopleData = await peopleApi.getAll()
-      groupsData = await groupsApi.getAll()
+      // Load all data including entries on initial mount
+      const [peopleData, groupsData, entriesData] = await Promise.all([
+        peopleApi.getAll(),
+        groupsApi.getAll(),
+        entriesApi.getAll()
+      ])
       setPeople(peopleData)
       setGroups(groupsData)
-      setEntries([]) // Entries loaded individually when needed
+      setEntries(entriesData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
       console.error('Error loading initial data:', err)
