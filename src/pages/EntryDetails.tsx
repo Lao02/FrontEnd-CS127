@@ -27,6 +27,8 @@ function EntryDetails() {
   const [editingAlloc, setEditingAlloc] = useState<PaymentAllocation | null>(null);
   const [paymentFromAllocation, setPaymentFromAllocation] = useState<PaymentAllocation | null>(null);
   const [paymentForTerm, setPaymentForTerm] = useState<{termId: number; termNumber: number} | null>(null);
+  const imageRequestUrl = 'http://localhost:8080/api/images/entry/'
+  const paymentProofUrl = 'http://localhost:8080/api/images/payment/' 
 
   useEffect(() => {
     const loadData = async () => {
@@ -221,10 +223,14 @@ function EntryDetails() {
   const getCorrectStatus = (term: InstallmentTerm): string => {
     const backendStatus = term.status;
     
-    // If already PAID or SKIPPED, keep those statuses
+    // 1. Trust the backend status first
+    // If backend says UNPAID, PAID, or SKIPPED, we generally want to respect that.
     if (backendStatus === 'PAID' || backendStatus === 'SKIPPED') {
       return backendStatus;
     }
+    
+    // 2. Optional: Only override 'UNPAID' if it is actually late (DELINQUENT)
+    // This allows 'UNPAID' to show for future dates if that is what the backend sent.
     
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -232,22 +238,13 @@ function EntryDetails() {
     const dueDate = new Date(term.dueDate);
     dueDate.setHours(0, 0, 0, 0);
     
-    // If due date is in the future (hasn't passed yet), it's NOT_STARTED
-    if (today < dueDate) {
-      return 'NOT_STARTED';
-    }
-    
-    // If due date is today, it's UNPAID
-    if (today.getTime() === dueDate.getTime()) {
-      return 'UNPAID';
-    }
-    
-    // If due date is in the past (after due date), it's DELINQUENT
-    if (today > dueDate) {
+    // If due date is in the past (after due date) and it's not paid, mark as DELINQUENT
+    if (today > dueDate && backendStatus !== 'PAID' && backendStatus !== 'SKIPPED') {
       return 'DELINQUENT';
     }
     
-    return 'UNPAID';
+    // Otherwise, return whatever the backend sent (e.g., 'UNPAID')
+    return backendStatus;
   };
 
   return (
@@ -360,7 +357,7 @@ function EntryDetails() {
                 {entry.imageProofs.map(proof => (
                   <img 
                     key={proof.id}
-                    src={proof.imageUrl} 
+                    src={`${imageRequestUrl}${encodeURIComponent(proof.imageName)}`} 
                     alt={proof.imageName}
                     style={{ maxWidth: '400px', maxHeight: '400px', objectFit: 'contain', border: '1px solid #ddd', borderRadius: '4px' }} 
                   />
@@ -408,7 +405,7 @@ function EntryDetails() {
                         {payment.imageUrls.map((url, idx) => (
                           <img 
                             key={idx}
-                            src={url} 
+                            src={`${paymentProofUrl}${encodeURIComponent(url)}`} 
                             alt={`Payment proof ${idx + 1}`}
                             style={{maxWidth: '80px', 
                               maxHeight: '80px', 
@@ -495,7 +492,6 @@ function EntryDetails() {
                     <th>Term #</th>
                     <th>Due Date</th>
                     <th>Status</th>
-                    <th>Notes</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -516,7 +512,6 @@ function EntryDetails() {
                             {status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td>{term.notes || '-'}</td>
                         <td>
                           {canPay && (
                             <button
