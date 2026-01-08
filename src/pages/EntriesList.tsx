@@ -3,6 +3,7 @@ import { Entry } from '../types';
 import CreatePaymentModal from '../components/CreatePaymentModal';
 import CreateEntryModal from '../components/CreateEntryModal';
 import { useApp } from '../context/AppContext';
+import { formatBackendDate } from '../utils/date';
 import './EntriesList.css';
 
 const EntriesList: React.FC = () => {
@@ -121,10 +122,10 @@ const EntriesList: React.FC = () => {
               <button onClick={() => handleAddPayment(entry.id)}>Add Payment</button>
               <ul className="payments-list">
                 {(payments[entry.id] || []).map(payment => (
-                  <li key={payment.id} className="payment-item">
-                    <span>{payment.paymentAmount} on {new Date(payment.paymentDate).toLocaleDateString()}</span>
+                  <li key={payment.paymentId} className="payment-item">
+                    <span>{payment.paymentAmount} on {formatBackendDate(payment.paymentDate)}</span>
                     <button onClick={() => handleEditPayment(payment, entry.id)}>Edit</button>
-                    <button onClick={() => handleDeletePayment(payment.id, entry.id)}>Delete</button>
+                    <button onClick={() => handleDeletePayment(payment.paymentId, entry.id)}>Delete</button>
                   </li>
                 ))}
               </ul>

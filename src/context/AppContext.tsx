@@ -61,14 +61,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
-      // Note: No getAll endpoint for entries - entries loaded individually
-      let peopleData: Person[] = []
-      let groupsData: Group[] = []
-      peopleData = await peopleApi.getAll()
-      groupsData = await groupsApi.getAll()
+      // Load all data including entries on initial mount
+      const [peopleData, groupsData, entriesData] = await Promise.all([
+        peopleApi.getAll(),
+        groupsApi.getAll(),
+        entriesApi.getAll()
+      ])
       setPeople(peopleData)
       setGroups(groupsData)
-      setEntries([]) // Entries loaded individually when needed
+      setEntries(entriesData)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data')
       console.error('Error loading initial data:', err)
@@ -120,8 +121,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       setError(null)
       await entriesApi.deleteAllPaid()
-      // Remove all paid entries from local state
-      setEntries(entries.filter(entry => entry.status !== 'PAID'))
+      // Refresh entries from backend to get updated list
+      await refreshEntries()
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete paid entries'
       setError(errorMessage)
@@ -209,6 +210,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setError(null)
       await peopleApi.delete(id)
       setPeople(people.filter(person => person.personID !== id))
+      
+      // Also remove this person from all groups they're a member of
+      setGroups(groups.map(group => ({
+        ...group,
+        groupMembersList: group.groupMembersList?.filter(member => member.personID !== id) || []
+      })))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete person'
       setError(errorMessage)
@@ -286,8 +293,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await apiRequest(`/groups/${groupID}/members/${personID}`, {
         method: 'DELETE',
       })
-      // Refresh the group to get updated members list
-      await refreshGroups()
+      // Update local state immediately
+      setGroups(groups.map(group => {
+        if (group.groupID === groupID) {
+          return {
+            ...group,
+            groupMembersList: group.groupMembersList?.filter(member => member.personID !== personID) || []
+          }
+        }
+        return group
+      }))
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to remove group member'
       setError(errorMessage)

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Payment, Person } from '../types';
 import { useApp } from '../context/AppContext';
 import './CreatePaymentModal.css';
@@ -6,6 +6,7 @@ import './CreatePaymentModal.css';
 interface CreatePaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSave?: () => void; 
   initialPayment?: Payment | null;
   people: Person[];
   entryId: string;
@@ -17,18 +18,19 @@ interface CreatePaymentModalProps {
   defaultPayee?: Person; // For non-group expense - default to borrower
 }
 
-const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose, initialPayment, people, entryId, termNumber, suggestedAmount, suggestedDate, lockedPayee, maxPaymentAmount, defaultPayee }) => {
+const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose, onSave, initialPayment, people, entryId, termNumber, suggestedAmount, suggestedDate, lockedPayee, maxPaymentAmount, defaultPayee }) => {
   const { addPayment, getEntryById } = useApp();
   const [personId, setPersonId] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [notes, setNotes] = useState('');
-  const [proof, setProof] = useState<File | null>(null);
+  const [proofs, setProofs] = useState<File[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const hasFetchedMaxAmount = useRef(false);
 
   React.useEffect(() => {
     if (initialPayment) {
-      setPersonId(initialPayment.payee.personID.toString());
+      setPersonId(initialPayment.payeeDto.personID.toString());
       setPaymentAmount(initialPayment.paymentAmount.toString());
       // Handle date properly to avoid timezone offset
       if (initialPayment.paymentDate) {
@@ -41,7 +43,7 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
         setPaymentDate(new Date().toISOString().slice(0, 10));
       }
       setNotes(initialPayment.notes || '');
-      setProof(null);
+      setProofs([]);
     } else {
       setPersonId(lockedPayee ? lockedPayee.personID.toString() : (defaultPayee ? defaultPayee.personID.toString() : ''));
       setPaymentAmount(suggestedAmount ? suggestedAmount.toString() : '');
@@ -55,26 +57,32 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
         setPaymentDate(new Date().toISOString().slice(0, 10));
       }
       setNotes('');
-      setProof(null);
+      setProofs([]);
     }
     setFormError(null);
+    
+    // Reset the ref when modal closes
+    if (!isOpen) {
+      hasFetchedMaxAmount.current = false;
+    }
   }, [initialPayment, isOpen, suggestedAmount, suggestedDate, lockedPayee, defaultPayee]);
 
   if (!isOpen) return null;
 
   const [maxAmount, setMaxAmount] = React.useState<number | null>(null);
   React.useEffect(() => {
-    (async () => {
-      if (entryId) {
+    if (entryId && !hasFetchedMaxAmount.current) {
+      hasFetchedMaxAmount.current = true;
+      (async () => {
         try {
           const entry = await getEntryById(entryId);
           if (entry) setMaxAmount(entry.amountRemaining);
         } catch (err) {
           console.error('Failed to get entry:', err);
         }
-      }
-    })();
-  }, [entryId, getEntryById]);
+      })();
+    }
+  }, [entryId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,12 +114,19 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
     formData.append('paymentAmount', paymentAmount);
     formData.append('paymentDate', paymentDate || new Date().toISOString().slice(0, 10));
     if (notes) formData.append('notes', notes);
-    if (termNumber) formData.append('termNumber', termNumber.toString());
-    if (proof) formData.append('proof', proof);
+    if (termNumber) formData.append('termId', termNumber.toString()); // Backend expects termId not termNumber
+    if (proofs && proofs.length > 0) {
+      proofs.forEach((file) => {
+        formData.append('imageFiles', file); // Backend expects imageFiles not proof
+      });
+    }
 
     try {
       await addPayment(formData);
       onClose();
+      if (onSave) {
+        onSave();
+      }
     } catch (err: any) {
       setFormError(err?.message || 'Failed to save payment');
     }
@@ -126,7 +141,7 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{initialPayment ? 'Edit Payment' : 'Add Payment'}</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Close modal">×</button>
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close modal">×</button>
         </div>
         {formError && <div className="error-message">{formError}</div>}
         <form onSubmit={handleSubmit}>
@@ -140,7 +155,7 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
             </select>
             {lockedPayee && (
               <small style={{ display: 'block', marginTop: '0.5em', color: '#666', fontStyle: 'italic' }}>
-                Payee is locked for this allocation payment
+                Payee is locked to the borrower
               </small>
             )}
           </div>
@@ -188,9 +203,15 @@ const CreatePaymentModal: React.FC<CreatePaymentModalProps> = ({ isOpen, onClose
             <input
               type="file"
               accept="image/*"
-              onChange={e => setProof(e.target.files?.[0] || null)}
+              multiple
+              onChange={e => setProofs(e.target.files ? Array.from(e.target.files) : [])}
             />
-            <small>Photo/s showing the payment (e.g. EWallet screenshot)</small>
+            <small>Photo/s showing the payment (e.g. EWallet screenshot) - you can select multiple files</small>
+            {proofs.length > 0 && (
+              <small style={{ display: 'block', marginTop: '0.3em', color: '#666' }}>
+                {proofs.length} file{proofs.length > 1 ? 's' : ''} selected
+              </small>
+            )}
           </div>
           <div className="form-group">
             <label>Notes</label>

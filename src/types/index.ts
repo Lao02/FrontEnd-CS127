@@ -1,23 +1,25 @@
-export interface InstallmentTerm {
-  termNumber: number;
-  dueDate: Date;
-  status: InstallmentStatus;
-  paymentDate?: Date;
-  skipped?: boolean;
-  delinquent?: boolean;
-  notes?: string; // Editable notes for each term
-}
 // Enumerations
 export enum TransactionType {
-  STRAIGHT_EXPENSE = 'Straight Expense',
-  INSTALLMENT_EXPENSE = 'Installment Expense',
-  GROUP_EXPENSE = 'Group Expense',
+  STRAIGHT = 'STRAIGHT',
+  INSTALLMENT = 'INSTALLMENT',
+  GROUP = 'GROUP',
 }
 
 export enum PaymentStatus {
   UNPAID = 'UNPAID',
   PARTIALLY_PAID = 'PARTIALLY_PAID',
   PAID = 'PAID',
+}
+
+export enum PaymentAllocationStatus {
+  UNPAID = 'UNPAID',
+  PARTIALLY_PAID = 'PARTIALLY_PAID',
+  PAID = 'PAID',
+}
+
+export enum PaymentFrequency {
+  MONTHLY = 'MONTHLY',
+  WEEKLY = 'WEEKLY',
 }
 
 export enum InstallmentStatus {
@@ -28,15 +30,12 @@ export enum InstallmentStatus {
   DELINQUENT = 'DELINQUENT',
 }
 
-export enum PaymentAllocationStatus {
-  UNPAID = 'UNPAID',
-  PARTIALLY_PAID = 'PARTIALLY_PAID',
-  PAID = 'PAID',
-}
-
-export enum PaymentFrequency {
-  MONTHLY = 'Monthly',
-  WEEKLY = 'Weekly',
+export interface InstallmentTerm {
+  termId: number;
+  termNumber: number;
+  dueDate: Date;
+  status: InstallmentStatus | string;
+  notes?: string;
 }
 
 export interface Person {
@@ -53,44 +52,28 @@ export interface Group {
 }
 
 export interface Payment {
-  id: number; 
+  paymentId: number; 
   entryId: string; 
   paymentDate: Date; 
   paymentAmount: number; 
-  payee: Person; 
-  termNumber?: number; 
-  proof?: Blob; 
+  payeeDto: Person; 
+  termId?: number; 
   imageUrls?: string[]; 
   notes?: string;
-  createdAt?: Date; 
-  updatedAt?: Date; 
-}
-
-export interface InstallmentDetails {
-  id: string; 
-  entryId: string;
-  startDate: Date; 
-  paymentFrequency: PaymentFrequency;
-  paymentTerms: number; 
-  paymentAmountPerTerm: number; 
-  terms: InstallmentTerm[];
-  notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface PaymentAllocation {
-  id: string; 
-  entryId: string;
+  allocationId: number; 
+  groupExpenseEntryId: string;
   description: string; 
-  payee: Person;
+  groupMemberPersonId: number;
+  borrowerGroupId: number;
+  groupMemberDto: Person;
   amount: number; 
   amountPaid: number; 
-  percentageOfTotal: number; 
-  status: PaymentAllocationStatus; 
+  percent: number; 
+  paymentAllocationStatus: PaymentAllocationStatus; 
   notes?: string;
-  createdAt: Date;
-  updatedAt: Date;
 }
 
 export interface Entry {
@@ -100,19 +83,24 @@ export interface Entry {
   transactionType: TransactionType; 
   dateBorrowed?: Date; 
   dateFullyPaid?: Date; 
-  borrower: Person | Group; 
-  lender: Person;
+  borrowerId?: number; // For STRAIGHT and INSTALLMENT
+  borrowerGroupId?: number; // For GROUP
+  borrowerName: string;
+  lenderId: number;
+  lenderName: string;
   amountBorrowed: number; 
   amountRemaining: number; 
   status: PaymentStatus; 
   notes?: string;
-  paymentNotes?: string; 
-  proofOfLoan?: Blob; 
   referenceId: string; 
+  imageProofs?: Array<{id: number; imageUrl: string; imageName: string}>;
   payments?: Payment[]; 
-  installmentDetails?: InstallmentDetails; 
+  // Installment-specific fields
+  startDate?: Date;
+  paymentFrequency?: PaymentFrequency;
+  paymentTerms?: number;
+  paymentAmountPerTerm?: number;
+  // Group-specific fields
   paymentAllocations?: PaymentAllocation[]; 
-  createdAt: Date;
-  updatedAt: Date;
 }
 

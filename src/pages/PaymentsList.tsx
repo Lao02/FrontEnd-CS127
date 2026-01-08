@@ -21,7 +21,7 @@ const PaymentsList: React.FC<PaymentsListProps> = ({ entryId }) => {
       <h2>Payments</h2>
       <ul className="payments-list">
         {payments.map(payment => (
-          <li key={payment.id} className="payment-item">
+          <li key={payment.paymentId} className="payment-item">
             <span>{payment.paymentAmount} on {payment.paymentDate.toString()}</span>
             {/* womp */}
           </li>

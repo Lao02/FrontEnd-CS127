@@ -17,7 +17,7 @@ function AllPaymentsRecord() {
 
   useEffect(() => {
     getAllEntries();
-  }, []);
+  }, [getAllEntries]);
 
   const handleModalClose = () => {
     setShowCreateModal(false);
@@ -57,12 +57,23 @@ function AllPaymentsRecord() {
     let filtered = entries;
     if (search.trim()) {
       const s = search.trim().toLowerCase();
-      filtered = filtered.filter(e =>
-        e.entryName.toLowerCase().includes(s) ||
-        (typeof e.borrower === 'object' && 'firstName' in e.borrower && `${e.borrower.firstName} ${e.borrower.lastName}`.toLowerCase().includes(s)) ||
-        (typeof e.borrower === 'object' && 'groupName' in e.borrower && e.borrower.groupName.toLowerCase().includes(s)) ||
-        (typeof e.lender === 'object' && 'firstName' in e.lender && `${e.lender.firstName} ${e.lender.lastName}`.toLowerCase().includes(s))
-      );
+      filtered = filtered.filter(e => {
+        // Check name fields
+        const nameMatch = e.entryName.toLowerCase().includes(s) ||
+          e.borrowerName?.toLowerCase().includes(s) ||
+          e.lenderName?.toLowerCase().includes(s);
+        
+        // Check transaction type enum value
+        const typeMatch = e.transactionType.toLowerCase().includes(s);
+        
+        // Check transaction type readable names (only for matching type)
+        const typeNameMatch = 
+          (e.transactionType === 'STRAIGHT' && ('straight'.includes(s) || 'straight expense'.includes(s))) ||
+          (e.transactionType === 'INSTALLMENT' && ('installment'.includes(s) || 'installment expense'.includes(s))) ||
+          (e.transactionType === 'GROUP' && ('group'.includes(s) || 'group expense'.includes(s)));
+        
+        return nameMatch || typeMatch || typeNameMatch;
+      });
     }
     if (statusFilter) {
       filtered = filtered.filter(e => e.status === statusFilter);
@@ -159,9 +170,9 @@ function AllPaymentsRecord() {
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
           <option value="">All Types</option>
-          <option value="Straight Expense">Straight</option>
-          <option value="Installment Expense">Installment</option>
-          <option value="Group Expense">Group</option>
+          <option value="STRAIGHT">Straight</option>
+          <option value="INSTALLMENT">Installment</option>
+          <option value="GROUP">Group</option>
         </select>
       </div>
 
@@ -192,11 +203,7 @@ function AllPaymentsRecord() {
                   <td><span className="entry-name">{entry.entryName}</span></td>
                   <td><span className={`type-badge type-${entry.transactionType.replace(/\s/g, '').toLowerCase()}`}>{entry.transactionType}</span></td>
                   <td>
-                    {'groupName' in entry.borrower
-                      ? <span className="borrower-group">{entry.borrower.groupName}</span>
-                      : 'firstName' in entry.borrower
-                        ? <span className="borrower-person">{entry.borrower.firstName} {entry.borrower.lastName}</span>
-                        : ''}
+                    <span className="borrower-name">{entry.borrowerName || ''}</span>
                   </td>
                   <td><span className="amount">₱{entry.amountBorrowed.toLocaleString()}</span></td>
                   <td><span className="amount-remaining">₱{entry.amountRemaining.toLocaleString()}</span></td>
